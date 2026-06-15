@@ -11,7 +11,7 @@ interface ChatInterfaceProps {
   messages: Message[];
   isLoading: boolean;
   currentAgent: AgentType;
-  onSendMessage: (text: string, agent?: AgentType) => void;
+  onSendMessage: (text: string, agent?: AgentType, file?: File) => void;
   onAgentChange: (agent: AgentType) => void;
 }
 
@@ -73,14 +73,9 @@ export function ChatInterface({
   }, [messages]);
 
   const handleSearch = (text: string) => {
-    if (selectedFile) {
-      // Append file info to message
-      const fileMsg = text + `\n\n[Datei angehängt: ${selectedFile.name}]`;
-      onSendMessage(fileMsg, currentAgent);
-      setSelectedFile(null);
-    } else {
-      onSendMessage(text, currentAgent);
-    }
+    onSendMessage(text, currentAgent, selectedFile ?? undefined);
+    setSelectedFile(null);
+    setFileError(null);
   };
 
   const handleFileSelect = (file: File) => {

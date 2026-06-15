@@ -1,5 +1,43 @@
 import type { Message } from '../types';
 
+interface ApiMessage {
+  role: string;
+  content: string | ApiContentBlock[];
+}
+
+interface ApiContentBlock {
+  type: 'text' | 'image';
+  text?: string;
+  source?: {
+    type: 'base64';
+    media_type: string;
+    data: string;
+  };
+}
+
+function toApiMessages(messages: Message[]): ApiMessage[] {
+  return messages.map((m) => {
+    if (m.imageBase64 && m.imageMimeType) {
+      const blocks: ApiContentBlock[] = [
+        {
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: m.imageMimeType,
+            data: m.imageBase64,
+          },
+        },
+        {
+          type: 'text',
+          text: m.content || 'Analysiere dieses Bild bitte.',
+        },
+      ];
+      return { role: m.role, content: blocks };
+    }
+    return { role: m.role, content: m.content };
+  });
+}
+
 export async function streamChat(
   messages: Message[],
   agent: string,
@@ -12,14 +50,14 @@ export async function streamChat(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        messages: messages.map((m) => ({ role: m.role, content: m.content })),
+        messages: toApiMessages(messages),
         agent,
       }),
     });
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ error: 'Server-Fehler' }));
-      throw new Error(errorData.error || `HTTP ${response.status}`);
+      throw new Error((errorData as { error: string }).error || `HTTP ${response.status}`);
     }
 
     if (!response.body) {
@@ -49,7 +87,7 @@ export async function streamChat(
         }
 
         try {
-          const parsed = JSON.parse(data);
+          const parsed = JSON.parse(data) as { text?: string; error?: string };
           if (parsed.error) throw new Error(parsed.error);
           if (parsed.text) onToken(parsed.text);
         } catch (parseError) {
@@ -83,11 +121,11 @@ export async function analyzeFile(
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({ error: 'Server-Fehler' }));
-    throw new Error(errorData.error || `HTTP ${response.status}`);
+    throw new Error((errorData as { error: string }).error || `HTTP ${response.status}`);
   }
 
-  const data = await response.json();
-  return data.analysis as string;
+  const data = await response.json() as { analysis: string };
+  return data.analysis;
 }
 
 export async function checkHealth(): Promise<{ status: string; apiKeySet: boolean }> {

@@ -130,6 +130,7 @@ app.post('/api/chat', async (req, res) => {
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
     const systemPrompt = getSystemPrompt(agent);
 
+    // content may be a string (text) or an array of content blocks (e.g. image + text)
     const anthropicMessages = messages.map((msg) => ({
       role: msg.role,
       content: msg.content,

@@ -9,6 +9,9 @@ export interface Message {
   agent?: AgentType;
   timestamp: Date;
   files?: UploadedFile[];
+  imageBase64?: string;
+  imageMimeType?: string;
+  imageName?: string;
 }
 
 export interface UploadedFile {

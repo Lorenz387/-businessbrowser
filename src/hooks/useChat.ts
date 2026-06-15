@@ -6,14 +6,42 @@ function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
+function readFileAsBase64(file: File): Promise<{ base64: string; mimeType: string }> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      const base64 = dataUrl.split(',')[1];
+      resolve({ base64, mimeType: file.type });
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 export function useChat(defaultAgent: AgentType = 'research') {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [currentAgent, setCurrentAgent] = useState<AgentType>(defaultAgent);
 
   const sendMessage = useCallback(
-    async (text: string, agent?: AgentType) => {
+    async (text: string, agent?: AgentType, file?: File) => {
       const activeAgent = agent ?? currentAgent;
+
+      let imageBase64: string | undefined;
+      let imageMimeType: string | undefined;
+      let imageName: string | undefined;
+
+      if (file?.type.startsWith('image/')) {
+        try {
+          const result = await readFileAsBase64(file);
+          imageBase64 = result.base64;
+          imageMimeType = result.mimeType;
+          imageName = file.name;
+        } catch {
+          // if reading fails just send text
+        }
+      }
 
       const userMessage: Message = {
         id: generateId(),
@@ -21,6 +49,9 @@ export function useChat(defaultAgent: AgentType = 'research') {
         content: text,
         agent: activeAgent,
         timestamp: new Date(),
+        imageBase64,
+        imageMimeType,
+        imageName,
       };
 
       setMessages((prev) => [...prev, userMessage]);

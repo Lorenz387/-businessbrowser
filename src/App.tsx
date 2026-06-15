@@ -125,7 +125,7 @@ export default function App() {
                 messages={messages}
                 isLoading={isLoading}
                 currentAgent={currentAgent}
-                onSendMessage={(text, agent) => sendMessage(text, agent ?? currentAgent)}
+                onSendMessage={(text, agent, file) => sendMessage(text, agent ?? currentAgent, file)}
                 onAgentChange={handleAgentChange}
               />
             </div>

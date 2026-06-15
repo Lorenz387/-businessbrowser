@@ -39,13 +39,35 @@ export function MessageBubble({ message }: MessageBubbleProps) {
   const isEmpty = !message.content && !isUser;
 
   if (isUser) {
+    const hasImage = !!message.imageBase64 && !!message.imageMimeType;
     return (
       <div className="flex justify-end animate-fade-in">
-        <div className="max-w-[80%] sm:max-w-[70%]">
-          <div className="bg-gradient-to-br from-violet-600 to-blue-600 rounded-2xl rounded-tr-sm px-4 py-3 text-white text-sm leading-relaxed shadow-lg shadow-violet-500/20">
-            {message.content}
-          </div>
-          <p className="text-xs text-slate-600 mt-1 text-right pr-1">
+        <div className="max-w-[80%] sm:max-w-[70%] flex flex-col items-end gap-1.5">
+          {/* Image thumbnail */}
+          {hasImage && (
+            <div className="relative">
+              <img
+                src={`data:${message.imageMimeType};base64,${message.imageBase64}`}
+                alt={message.imageName ?? 'Bild'}
+                className="max-h-48 max-w-xs rounded-xl object-contain border border-white/10 shadow-lg cursor-zoom-in"
+                onClick={() => {
+                  window.open(`data:${message.imageMimeType};base64,${message.imageBase64}`, '_blank');
+                }}
+              />
+              {message.imageName && (
+                <span className="absolute bottom-1 left-1 right-1 text-center text-[10px] text-white/60 bg-black/50 rounded px-1 py-0.5 truncate">
+                  {message.imageName}
+                </span>
+              )}
+            </div>
+          )}
+          {/* Text bubble */}
+          {message.content && (
+            <div className="bg-gradient-to-br from-violet-600 to-blue-600 rounded-2xl rounded-tr-sm px-4 py-3 text-white text-sm leading-relaxed shadow-lg shadow-violet-500/20">
+              {message.content}
+            </div>
+          )}
+          <p className="text-xs text-slate-600 pr-1">
             {message.timestamp.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
           </p>
         </div>
