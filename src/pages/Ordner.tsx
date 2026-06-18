@@ -1,71 +1,142 @@
-import { useState } from 'react';
-import { Folder, FolderOpen, Plus, ChevronRight, ChevronDown, Trash2 } from 'lucide-react';
+import { useState } from 'react'
+import { Folder, FolderOpen, FileText, Image, File, Plus, ChevronRight } from 'lucide-react'
 
-interface FolderItem { id: string; name: string; children: FolderItem[]; }
+interface FolderNode {
+  id: string
+  name: string
+  children?: FolderNode[]
+  files?: { id: string; name: string; type: string; size: string }[]
+}
 
-const defaultFolders: FolderItem[] = [
-  { id: '1', name: 'Projekte', children: [{ id: '1-1', name: 'Business Plan', children: [] }, { id: '1-2', name: 'Marketing', children: [] }] },
-  { id: '2', name: 'Dokumente', children: [{ id: '2-1', name: 'Berichte', children: [] }, { id: '2-2', name: 'Verträge', children: [] }] },
-  { id: '3', name: 'Bilder', children: [] },
-  { id: '4', name: 'Archiv', children: [{ id: '4-1', name: '2024', children: [] }] },
-];
+const defaultTree: FolderNode[] = [
+  {
+    id: '1',
+    name: 'Projekte',
+    children: [
+      { id: '1-1', name: 'Marketing', files: [
+        { id: 'f1', name: 'Brief_Q1.pdf', type: 'pdf', size: '2.4 MB' },
+        { id: 'f2', name: 'Social_Plan.xlsx', type: 'sheet', size: '890 KB' },
+      ]},
+      { id: '1-2', name: 'Produktlaunch', files: [
+        { id: 'f3', name: 'Pressemitteilung.docx', type: 'doc', size: '1.2 MB' },
+      ]},
+    ],
+    files: [],
+  },
+  {
+    id: '2',
+    name: 'Bilder',
+    files: [
+      { id: 'f4', name: 'Logo_Final.png', type: 'image', size: '3.1 MB' },
+      { id: 'f5', name: 'Banner_Instagram.jpg', type: 'image', size: '1.8 MB' },
+      { id: 'f6', name: 'Hero_Image.png', type: 'image', size: '4.2 MB' },
+    ],
+  },
+  {
+    id: '3',
+    name: 'Dokumente',
+    files: [
+      { id: 'f7', name: 'Vertrag_2026.pdf', type: 'pdf', size: '560 KB' },
+      { id: 'f8', name: 'Meeting_Notes.txt', type: 'text', size: '12 KB' },
+    ],
+  },
+]
 
-function FolderNode({ folder, depth = 0, onDelete }: { folder: FolderItem; depth?: number; onDelete: (id: string) => void }) {
-  const [open, setOpen] = useState(depth === 0);
-  const [hovered, setHovered] = useState(false);
-
-  return (
-    <div>
-      <div
-        className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer group transition-colors ${hovered ? 'bg-blue-50' : 'hover:bg-gray-100'}`}
-        style={{ paddingLeft: `${12 + depth * 20}px` }}
-        onClick={() => setOpen(!open)}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
-      >
-        {folder.children.length > 0 ? (open ? <ChevronDown size={14} className="text-gray-400" /> : <ChevronRight size={14} className="text-gray-400" />) : <span className="w-3.5" />}
-        {open && folder.children.length > 0 ? <FolderOpen size={16} className="text-blue-500" /> : <Folder size={16} className="text-blue-400" />}
-        <span className="text-sm text-gray-700 flex-1">{folder.name}</span>
-        {depth > 0 && (
-          <button onClick={e => { e.stopPropagation(); onDelete(folder.id); }} className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-red-50 rounded text-gray-300 hover:text-red-500 transition-all">
-            <Trash2 size={12} />
-          </button>
-        )}
-      </div>
-      {open && folder.children.map(child => <FolderNode key={child.id} folder={child} depth={depth + 1} onDelete={onDelete} />)}
-    </div>
-  );
+const fileIcon = (type: string) => {
+  if (type === 'image') return <Image size={16} className="text-blue-500" />
+  if (type === 'pdf' || type === 'doc') return <FileText size={16} className="text-red-500" />
+  return <File size={16} className="text-slate-400" />
 }
 
 export default function Ordner() {
-  const [folders, setFolders] = useState<FolderItem[]>(defaultFolders);
-  const [newName, setNewName] = useState('');
+  const [tree] = useState<FolderNode[]>(defaultTree)
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['1']))
+  const [selectedFolder, setSelectedFolder] = useState<FolderNode | null>(defaultTree[0].children![0])
+
+  const toggleFolder = (id: string) => {
+    setExpandedFolders(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
   const addFolder = () => {
-    if (!newName.trim()) return;
-    setFolders(prev => [...prev, { id: Date.now().toString(), name: newName.trim(), children: [] }]);
-    setNewName('');
-  };
+    // placeholder - would need state mutation
+  }
 
-  const deleteFolder = (id: string) => {
-    const remove = (items: FolderItem[]): FolderItem[] => items.filter(i => i.id !== id).map(i => ({ ...i, children: remove(i.children) }));
-    setFolders(remove);
-  };
+  const renderTree = (nodes: FolderNode[], depth = 0): React.ReactNode => nodes.map(node => (
+    <div key={node.id}>
+      <button
+        onClick={() => { toggleFolder(node.id); setSelectedFolder(node) }}
+        className={`w-full text-left flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors ${selectedFolder?.id === node.id ? 'bg-violet-50 text-violet-700' : 'text-slate-600 hover:bg-slate-50'}`}
+        style={{ paddingLeft: `${12 + depth * 16}px` }}
+      >
+        <ChevronRight size={12} className={`transition-transform flex-shrink-0 ${expandedFolders.has(node.id) ? 'rotate-90' : ''}`} />
+        {expandedFolders.has(node.id)
+          ? <FolderOpen size={14} className="text-violet-500 flex-shrink-0" />
+          : <Folder size={14} className="text-slate-400 flex-shrink-0" />}
+        {node.name}
+      </button>
+      {expandedFolders.has(node.id) && node.children && (
+        <div>{renderTree(node.children, depth + 1)}</div>
+      )}
+    </div>
+  ))
 
   return (
-    <div className="flex-1 bg-gray-50 p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Ordner</h1>
-      </div>
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 max-w-md">
-        <div className="flex gap-2 mb-4">
-          <input value={newName} onChange={e => setNewName(e.target.value)} onKeyDown={e => e.key === 'Enter' && addFolder()} placeholder="Neuer Ordner..." className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
-          <button onClick={addFolder} disabled={!newName.trim()} className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-3 rounded-lg transition-colors">
-            <Plus size={16} />
-          </button>
+    <div className="flex h-[calc(100vh-56px)]">
+      <div className="w-56 border-r border-slate-200 bg-white flex flex-col">
+        <div className="p-4 border-b border-slate-100">
+          <div className="flex items-center justify-between">
+            <span className="font-semibold text-slate-800 text-sm">Ordner</span>
+            <button onClick={addFolder} className="p-1 hover:bg-violet-50 rounded-lg">
+              <Plus size={16} className="text-violet-600" />
+            </button>
+          </div>
         </div>
-        {folders.map(f => <FolderNode key={f.id} folder={f} onDelete={deleteFolder} />)}
+        <div className="flex-1 overflow-y-auto p-2">
+          {renderTree(tree)}
+        </div>
+      </div>
+
+      <div className="flex-1 p-6">
+        {selectedFolder ? (
+          <>
+            <div className="flex items-center gap-2 mb-6">
+              <FolderOpen size={20} className="text-violet-500" />
+              <h2 className="text-lg font-bold text-slate-800">{selectedFolder.name}</h2>
+              <span className="text-sm text-slate-400">({(selectedFolder.files || []).length} Dateien)</span>
+            </div>
+            {(selectedFolder.files || []).length > 0 ? (
+              <div className="space-y-2">
+                {(selectedFolder.files || []).map(file => (
+                  <div key={file.id} className="bg-white border border-slate-100 rounded-xl p-4 flex items-center gap-4 hover:shadow-sm cursor-pointer">
+                    <div className="w-9 h-9 bg-slate-50 rounded-lg flex items-center justify-center">
+                      {fileIcon(file.type)}
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-sm font-medium text-slate-700">{file.name}</div>
+                      <div className="text-xs text-slate-400">{file.size}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-64 text-center">
+                <Folder size={48} className="text-slate-200 mb-4" />
+                <p className="text-slate-400 text-sm">Dieser Ordner ist leer</p>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="flex flex-col items-center justify-center h-64 text-center">
+            <Folder size={48} className="text-slate-200 mb-4" />
+            <p className="text-slate-400 text-sm">Waehle einen Ordner aus</p>
+          </div>
+        )}
       </div>
     </div>
-  );
+  )
 }

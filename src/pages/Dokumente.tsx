@@ -1,60 +1,118 @@
-import { useState } from 'react';
-import { FileText, Search, Trash2, Edit3, Plus } from 'lucide-react';
-import { store, Document } from '../store';
-import { useNavigate } from 'react-router-dom';
+import { useState } from 'react'
+import { FileText, Search, Trash2, Edit3, Plus } from 'lucide-react'
+import type { Document } from '../types'
+import { useLocalStorage } from '../hooks/useLocalStorage'
+
+const defaultDocs: Document[] = [
+  { id: '1', name: 'Marketing Brief Q1', content: 'Inhalt des Marketing Briefs...', createdAt: '2026-06-01', updatedAt: '2026-06-18' },
+  { id: '2', name: 'Produktbeschreibung App', content: 'Die App bietet...', createdAt: '2026-06-05', updatedAt: '2026-06-17' },
+  { id: '3', name: 'Content Strategie Notizen', content: 'Notizen zur Content Strategie...', createdAt: '2026-06-10', updatedAt: '2026-06-15' },
+  { id: '4', name: 'Meeting Protokoll', content: 'Protokoll vom...', createdAt: '2026-06-12', updatedAt: '2026-06-14' },
+  { id: '5', name: 'Keyword Research', content: 'Keywords: ...', createdAt: '2026-06-14', updatedAt: '2026-06-14' },
+]
 
 export default function Dokumente() {
-  const navigate = useNavigate();
-  const [docs, setDocs] = useState<Document[]>(store.getDocuments());
-  const [search, setSearch] = useState('');
+  const [docs, setDocs] = useLocalStorage<Document[]>('documents', defaultDocs)
+  const [search, setSearch] = useState('')
+  const [editingDoc, setEditingDoc] = useState<Document | null>(null)
 
-  const filtered = docs.filter(d => d.name.toLowerCase().includes(search.toLowerCase()));
+  const filtered = docs.filter(d => d.name.toLowerCase().includes(search.toLowerCase()))
+
   const deleteDoc = (id: string) => {
-    const updated = docs.filter(d => d.id !== id);
-    store.saveDocuments(updated);
-    setDocs(updated);
-  };
+    setDocs(prev => prev.filter(d => d.id !== id))
+  }
+
+  const saveDoc = (doc: Document) => {
+    setDocs(prev => prev.map(d => d.id === doc.id ? { ...doc, updatedAt: new Date().toISOString().split('T')[0] } : d))
+    setEditingDoc(null)
+  }
+
+  const createDoc = () => {
+    const newDoc: Document = {
+      id: Date.now().toString(),
+      name: 'Neues Dokument',
+      content: '',
+      createdAt: new Date().toISOString().split('T')[0],
+      updatedAt: new Date().toISOString().split('T')[0],
+    }
+    setDocs(prev => [newDoc, ...prev])
+    setEditingDoc(newDoc)
+  }
+
+  if (editingDoc) {
+    return (
+      <div className="p-6 h-full flex flex-col">
+        <div className="flex items-center justify-between mb-4">
+          <input
+            value={editingDoc.name}
+            onChange={e => setEditingDoc({ ...editingDoc, name: e.target.value })}
+            className="text-xl font-bold text-slate-800 bg-transparent border-b border-slate-200 focus:outline-none focus:border-violet-500 pb-1"
+          />
+          <div className="flex gap-2">
+            <button onClick={() => setEditingDoc(null)} className="text-sm border border-slate-200 px-4 py-2 rounded-lg hover:bg-slate-50">Abbrechen</button>
+            <button onClick={() => saveDoc(editingDoc)} className="text-sm bg-violet-600 text-white px-4 py-2 rounded-lg hover:bg-violet-700">Speichern</button>
+          </div>
+        </div>
+        <textarea
+          value={editingDoc.content}
+          onChange={e => setEditingDoc({ ...editingDoc, content: e.target.value })}
+          className="flex-1 border border-slate-200 rounded-xl p-4 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-violet-500"
+          placeholder="Dokument schreiben..."
+        />
+      </div>
+    )
+  }
 
   return (
-    <div className="flex-1 overflow-y-auto bg-gray-50 p-6">
+    <div className="p-6">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Dokumente</h1>
-        <button onClick={() => navigate('/ki-editor')} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
-          <Plus size={16} /> Neues Dokument
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">Dokumente</h1>
+          <p className="text-slate-500 text-sm mt-1">{docs.length} Dokumente</p>
+        </div>
+        <button onClick={createDoc} className="flex items-center gap-2 bg-gradient-to-r from-violet-600 to-purple-600 text-white px-4 py-2 rounded-xl text-sm font-medium">
+          <Plus size={16} />
+          Neues Dokument
         </button>
       </div>
-      <div className="flex items-center gap-3 mb-6 bg-white rounded-xl border border-gray-200 px-4 py-2.5 max-w-sm">
-        <Search size={16} className="text-gray-400" />
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Dokumente suchen..." className="text-sm outline-none text-gray-700 placeholder-gray-400 flex-1" />
+
+      <div className="relative mb-6 max-w-sm">
+        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Dokumente suchen..."
+          className="w-full border border-slate-200 rounded-xl pl-9 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+        />
       </div>
-      {filtered.length === 0 ? (
-        <div className="text-center py-16">
-          <div className="text-5xl mb-3">📄</div>
-          <p className="text-lg font-medium text-gray-600">Keine Dokumente</p>
-          <p className="text-sm text-gray-400 mt-1">Erstelle dein erstes Dokument im KI-Editor</p>
-          <button onClick={() => navigate('/ki-editor')} className="mt-4 bg-blue-600 text-white px-6 py-2 rounded-lg text-sm hover:bg-blue-700 transition-colors">KI-Editor öffnen</button>
-        </div>
-      ) : (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="grid grid-cols-4 text-xs font-semibold text-gray-500 uppercase tracking-wider px-4 py-3 border-b border-gray-100 bg-gray-50">
-            <span>Name</span><span>Erstellt</span><span>Geändert</span><span className="text-right">Aktionen</span>
-          </div>
-          {filtered.map(doc => (
-            <div key={doc.id} className="grid grid-cols-4 items-center px-4 py-3.5 border-b border-gray-50 hover:bg-gray-50 last:border-0">
-              <div className="flex items-center gap-3">
-                <FileText size={16} className="text-blue-500" />
-                <span className="text-sm font-medium text-gray-800 truncate">{doc.name}</span>
-              </div>
-              <span className="text-xs text-gray-400">{new Date(doc.createdAt).toLocaleDateString('de')}</span>
-              <span className="text-xs text-gray-400">{new Date(doc.updatedAt).toLocaleDateString('de')}</span>
-              <div className="flex justify-end gap-2">
-                <button onClick={() => navigate('/ki-editor')} className="p-1.5 hover:bg-blue-50 rounded text-gray-400 hover:text-blue-600 transition-colors"><Edit3 size={14} /></button>
-                <button onClick={() => deleteDoc(doc.id)} className="p-1.5 hover:bg-red-50 rounded text-gray-400 hover:text-red-500 transition-colors"><Trash2 size={14} /></button>
-              </div>
+
+      <div className="space-y-2">
+        {filtered.map(doc => (
+          <div key={doc.id} className="bg-white border border-slate-100 rounded-xl p-4 flex items-center gap-4 hover:shadow-sm transition-shadow">
+            <div className="w-10 h-10 bg-violet-50 rounded-lg flex items-center justify-center flex-shrink-0">
+              <FileText size={20} className="text-violet-500" />
             </div>
-          ))}
-        </div>
-      )}
+            <div className="flex-1">
+              <div className="font-medium text-slate-800">{doc.name}</div>
+              <div className="text-xs text-slate-400 mt-0.5">Aktualisiert: {doc.updatedAt}</div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setEditingDoc(doc)}
+                className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-violet-600 transition-colors"
+              >
+                <Edit3 size={16} />
+              </button>
+              <button
+                onClick={() => deleteDoc(doc.id)}
+                className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-red-500 transition-colors"
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
-  );
+  )
 }

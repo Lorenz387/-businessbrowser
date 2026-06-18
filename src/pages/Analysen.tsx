@@ -1,110 +1,99 @@
-import { store } from '../store';
+import { useState } from 'react'
+import { TrendingUp, Users, Eye, Heart } from 'lucide-react'
+
+const periods = ['7 Tage', '30 Tage', '90 Tage', '1 Jahr']
+
+const barData = {
+  '7 Tage': [45, 62, 38, 71, 55, 89, 66],
+  '30 Tage': [120, 145, 98, 167, 134, 189, 156, 143, 178, 162, 201, 188, 176, 195, 167, 212, 198, 223, 209, 245, 231, 256, 242, 268, 254, 279, 265, 290, 276, 301],
+  '90 Tage': [800, 950, 1100, 1050, 1200, 1350, 1300, 1450, 1600, 1550, 1700, 1850],
+  '1 Jahr': [3200, 3800, 4200, 3900, 4500, 4800, 5100, 4900, 5400, 5700, 6000, 6500],
+}
+
+const platforms = [
+  { name: 'Instagram', value: 67, color: 'bg-pink-500' },
+  { name: 'TikTok', value: 45, color: 'bg-gray-800' },
+  { name: 'YouTube', value: 23, color: 'bg-red-500' },
+]
 
 export default function Analysen() {
-  const projects = store.getProjects();
-  const docs = store.getDocuments();
-  const chats = store.getChats();
+  const [period, setPeriod] = useState('30 Tage')
+  const data = barData[period as keyof typeof barData]
+  const maxVal = Math.max(...data)
 
-  const stats = [
-    { label: 'Projekte', value: projects.length, color: '#6366f1', icon: '📁' },
-    { label: 'Dokumente', value: docs.length, color: '#10b981', icon: '📝' },
-    { label: 'KI-Anfragen', value: chats.filter(c => c.role === 'user').length, color: '#3b82f6', icon: '🤖' },
-    { label: 'Verbindungen', value: store.getConnections().filter(c => c.connected).length, color: '#f59e0b', icon: '🔗' },
-  ];
-
-  const projectData = projects.slice(0, 6).map(p => ({ name: p.name, files: p.fileCount, color: p.color }));
-  const maxFiles = Math.max(...projectData.map(p => p.files), 1);
-
-  const activityData = [
-    { day: 'Mo', value: 4 }, { day: 'Di', value: 7 }, { day: 'Mi', value: 3 },
-    { day: 'Do', value: 9 }, { day: 'Fr', value: 6 }, { day: 'Sa', value: 2 }, { day: 'So', value: 5 },
-  ];
-  const maxActivity = Math.max(...activityData.map(d => d.value));
+  const kpis = [
+    { label: 'Reichweite', value: '124.5K', change: '+18%', icon: Eye, color: 'text-blue-500', bg: 'bg-blue-50' },
+    { label: 'Follower', value: '8,234', change: '+5.2%', icon: Users, color: 'text-green-500', bg: 'bg-green-50' },
+    { label: 'Engagement', value: '4.8%', change: '+0.9%', icon: Heart, color: 'text-pink-500', bg: 'bg-pink-50' },
+    { label: 'Wachstum', value: '+234', change: '+12%', icon: TrendingUp, color: 'text-violet-500', bg: 'bg-violet-50' },
+  ]
 
   return (
-    <div className="flex-1 overflow-y-auto bg-gray-50 p-6">
-      <h1 className="text-2xl font-bold text-gray-800 mb-6">Analysen</h1>
+    <div className="p-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">Analysen</h1>
+          <p className="text-slate-500 text-sm mt-1">Deine Performance im Überblick</p>
+        </div>
+        <div className="flex gap-2">
+          {periods.map(p => (
+            <button
+              key={p}
+              onClick={() => setPeriod(p)}
+              className={`text-xs px-3 py-1.5 rounded-lg transition-all ${period === p ? 'bg-violet-600 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:border-violet-300'}`}
+            >
+              {p}
+            </button>
+          ))}
+        </div>
+      </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
-        {stats.map(s => (
-          <div key={s.label} className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-2xl">{s.icon}</span>
-              <div className="w-2 h-2 rounded-full" style={{ background: s.color }} />
+      <div className="grid grid-cols-4 gap-4">
+        {kpis.map(kpi => (
+          <div key={kpi.label} className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm">
+            <div className={`w-9 h-9 ${kpi.bg} rounded-lg flex items-center justify-center mb-3`}>
+              <kpi.icon size={18} className={kpi.color} />
             </div>
-            <p className="text-3xl font-bold text-gray-800">{s.value}</p>
-            <p className="text-sm text-gray-500 mt-1">{s.label}</p>
+            <div className="text-2xl font-bold text-slate-800">{kpi.value}</div>
+            <div className="text-sm text-slate-500 mt-0.5">{kpi.label}</div>
+            <div className="text-xs text-green-600 mt-1">{kpi.change} vs. Vorperiode</div>
           </div>
         ))}
       </div>
 
-      <div className="grid grid-cols-2 gap-6">
-        {/* Project files bar chart */}
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-          <h2 className="font-semibold text-gray-800 mb-4">Dateien pro Projekt</h2>
-          {projectData.length === 0 ? (
-            <p className="text-gray-400 text-sm text-center py-8">Keine Projekte vorhanden</p>
-          ) : (
-            <div className="space-y-3">
-              {projectData.map(p => (
-                <div key={p.name}>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs text-gray-600 truncate max-w-32">{p.name}</span>
-                    <span className="text-xs font-medium text-gray-700">{p.files}</span>
-                  </div>
-                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                    <div className="h-full rounded-full transition-all" style={{ width: `${(p.files / maxFiles) * 100}%`, background: p.color }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+      <div className="bg-white rounded-xl p-5 border border-slate-100 shadow-sm">
+        <h3 className="font-semibold text-slate-800 mb-4">Reichweite</h3>
+        <div className="flex items-end gap-1 h-40">
+          {data.map((val, i) => (
+            <div
+              key={i}
+              className="flex-1 bg-violet-500 rounded-t opacity-80 hover:opacity-100 transition-opacity"
+              style={{ height: `${(val / maxVal) * 100}%` }}
+              title={val.toString()}
+            />
+          ))}
         </div>
+      </div>
 
-        {/* Weekly activity */}
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-          <h2 className="font-semibold text-gray-800 mb-4">Wöchentliche Aktivität</h2>
-          <div className="flex items-end gap-2 h-32">
-            {activityData.map(d => (
-              <div key={d.day} className="flex-1 flex flex-col items-center gap-1">
+      <div className="bg-white rounded-xl p-5 border border-slate-100 shadow-sm">
+        <h3 className="font-semibold text-slate-800 mb-4">Plattform Aufschlüsselung</h3>
+        <div className="space-y-4">
+          {platforms.map(p => (
+            <div key={p.name}>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-sm text-slate-700">{p.name}</span>
+                <span className="text-sm font-medium text-slate-800">{p.value}K</span>
+              </div>
+              <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
                 <div
-                  className="w-full rounded-t-md bg-blue-500 hover:bg-blue-600 transition-colors cursor-default"
-                  style={{ height: `${(d.value / maxActivity) * 100}%` }}
-                  title={`${d.value} Aktionen`}
+                  className={`h-full ${p.color} rounded-full transition-all duration-500`}
+                  style={{ width: `${(p.value / 100) * 100}%` }}
                 />
-                <span className="text-xs text-gray-400">{d.day}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Model usage */}
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-          <h2 className="font-semibold text-gray-800 mb-4">KI-Modell Nutzung</h2>
-          {[{ name: 'GPT-4.5', pct: 45, color: '#10b981' }, { name: 'Claude', pct: 30, color: '#6366f1' }, { name: 'Gemini', pct: 15, color: '#f59e0b' }, { name: 'Andere', pct: 10, color: '#94a3b8' }].map(m => (
-            <div key={m.name} className="mb-3">
-              <div className="flex justify-between mb-1">
-                <span className="text-xs text-gray-600">{m.name}</span>
-                <span className="text-xs font-medium text-gray-700">{m.pct}%</span>
-              </div>
-              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                <div className="h-full rounded-full" style={{ width: `${m.pct}%`, background: m.color }} />
               </div>
             </div>
           ))}
         </div>
-
-        {/* Quick tips */}
-        <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl p-5 text-white">
-          <h2 className="font-semibold mb-3">💡 KI-Tipp</h2>
-          <p className="text-sm text-blue-100 leading-relaxed">Nutze Workflows, um wiederkehrende Aufgaben zu automatisieren. Du kannst bis zu 70% Zeit sparen!</p>
-          <div className="mt-4 pt-4 border-t border-white/20">
-            <p className="text-xs text-blue-200">Gesamt-Aktivität diese Woche</p>
-            <p className="text-2xl font-bold mt-1">36 Aktionen</p>
-          </div>
-        </div>
       </div>
     </div>
-  );
+  )
 }

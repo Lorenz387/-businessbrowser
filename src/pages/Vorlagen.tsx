@@ -1,71 +1,69 @@
-import { useNavigate } from 'react-router-dom';
-import { store, Project } from '../store';
+import { useState } from 'react'
+
+const categories = ['Alle', 'Marketing', 'Social Media', 'Business', 'KI']
 
 const templates = [
-  { name: 'Business Plan', desc: 'Vollständiger Unternehmensplan', icon: '📊', color: '#6366f1', category: 'Business' },
-  { name: 'Content Kalender', desc: 'Social Media Planung', icon: '📅', color: '#ec4899', category: 'Marketing' },
-  { name: 'Reiseplanung', desc: 'Urlaubs- und Reiseorganisation', icon: '✈️', color: '#f59e0b', category: 'Lifestyle' },
-  { name: 'Fitness Tracker', desc: 'Sport und Gesundheitsplan', icon: '💪', color: '#10b981', category: 'Gesundheit' },
-  { name: 'Lernplan', desc: 'Strukturiertes Lernsystem', icon: '📚', color: '#3b82f6', category: 'Bildung' },
-  { name: 'Produktstrategie', desc: 'Produktentwicklung & Roadmap', icon: '🚀', color: '#8b5cf6', category: 'Business' },
-  { name: 'Meeting-Notizen', desc: 'Besprechungsprotokoll', icon: '📝', color: '#14b8a6', category: 'Produktivität' },
-  { name: 'OKR-Framework', desc: 'Ziele und Schlüsselergebnisse', icon: '🎯', color: '#ef4444', category: 'Business' },
-  { name: 'Rezeptsammlung', desc: 'Kochbuch und Ernährungsplan', icon: '🍳', color: '#f97316', category: 'Lifestyle' },
-  { name: 'Tagebuch', desc: 'Persönliches Journal', icon: '📓', color: '#a78bfa', category: 'Lifestyle' },
-  { name: 'Budgetplanung', desc: 'Finanzen und Ausgaben', icon: '💰', color: '#22c55e', category: 'Finanzen' },
-  { name: 'Kunden-CRM', desc: 'Kundenverwaltung', icon: '👥', color: '#0ea5e9', category: 'Business' },
-];
+  { id: '1', name: 'Instagram Post', category: 'Social Media', gradient: 'from-pink-400 to-orange-400', creator: 'LifeOS' },
+  { id: '2', name: 'Marketing Brief', category: 'Marketing', gradient: 'from-blue-400 to-violet-400', creator: 'LifeOS' },
+  { id: '3', name: 'Business Plan', category: 'Business', gradient: 'from-green-400 to-teal-400', creator: 'Pro User' },
+  { id: '4', name: 'KI Prompt Template', category: 'KI', gradient: 'from-violet-400 to-purple-500', creator: 'LifeOS' },
+  { id: '5', name: 'TikTok Script', category: 'Social Media', gradient: 'from-gray-700 to-gray-500', creator: 'Creator' },
+  { id: '6', name: 'Email Newsletter', category: 'Marketing', gradient: 'from-orange-400 to-red-400', creator: 'LifeOS' },
+  { id: '7', name: 'Pitch Deck', category: 'Business', gradient: 'from-cyan-400 to-blue-500', creator: 'Startup' },
+  { id: '8', name: 'KI Chat Vorlage', category: 'KI', gradient: 'from-rose-400 to-pink-500', creator: 'LifeOS' },
+  { id: '9', name: 'YouTube Beschreibung', category: 'Social Media', gradient: 'from-red-500 to-orange-500', creator: 'YouTuber' },
+  { id: '10', name: 'Content Kalender', category: 'Marketing', gradient: 'from-teal-400 to-green-500', creator: 'LifeOS' },
+  { id: '11', name: 'Angebot Vorlage', category: 'Business', gradient: 'from-yellow-400 to-orange-400', creator: 'Agency' },
+  { id: '12', name: 'KI Analyse Report', category: 'KI', gradient: 'from-indigo-400 to-violet-500', creator: 'LifeOS' },
+]
 
 export default function Vorlagen() {
-  const navigate = useNavigate();
+  const [activeCategory, setActiveCategory] = useState('Alle')
+  const [usedTemplate, setUsedTemplate] = useState<string | null>(null)
 
-  const useTemplate = (t: typeof templates[0]) => {
-    const project: Project = {
-      id: Date.now().toString(),
-      name: t.name,
-      description: t.desc,
-      color: t.color,
-      icon: t.icon,
-      fileCount: 0,
-      createdAt: new Date().toISOString().split('T')[0],
-    };
-    const projects = store.getProjects();
-    store.saveProjects([project, ...projects]);
-    navigate('/projekte');
-  };
-
-  const categories = [...new Set(templates.map(t => t.category))];
+  const filtered = templates.filter(t => activeCategory === 'Alle' || t.category === activeCategory)
 
   return (
-    <div className="flex-1 overflow-y-auto bg-gray-50 p-6">
+    <div className="p-6">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Vorlagen</h1>
-        <p className="text-sm text-gray-500 mt-1">Starte schnell mit fertigen Vorlagen</p>
+        <h1 className="text-2xl font-bold text-slate-800">Vorlagen</h1>
+        <p className="text-slate-500 text-sm mt-1">Starte mit einer professionellen Vorlage</p>
       </div>
-      {categories.map(cat => (
-        <div key={cat} className="mb-8">
-          <h2 className="font-semibold text-gray-700 mb-3 text-sm uppercase tracking-wider">{cat}</h2>
-          <div className="grid grid-cols-4 gap-4">
-            {templates.filter(t => t.category === cat).map(t => (
-              <div key={t.name} className="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-all group overflow-hidden">
-                <div className="h-24 flex items-center justify-center text-4xl" style={{ background: `linear-gradient(135deg, ${t.color}22, ${t.color}44)` }}>
-                  {t.icon}
+
+      <div className="flex gap-2 mb-6">
+        {categories.map(cat => (
+          <button
+            key={cat}
+            onClick={() => setActiveCategory(cat)}
+            className={`text-sm px-4 py-2 rounded-xl transition-all ${activeCategory === cat ? 'bg-violet-600 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:border-violet-300'}`}
+          >
+            {cat}
+          </button>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-3 gap-4">
+        {filtered.map(t => (
+          <div key={t.id} className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden hover:shadow-md transition-all">
+            <div className={`h-28 bg-gradient-to-br ${t.gradient}`} />
+            <div className="p-4">
+              <div className="font-semibold text-slate-800 text-sm">{t.name}</div>
+              <div className="flex items-center justify-between mt-3">
+                <div>
+                  <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">{t.category}</span>
+                  <span className="text-xs text-slate-400 ml-2">by {t.creator}</span>
                 </div>
-                <div className="p-4">
-                  <p className="font-semibold text-gray-800 text-sm">{t.name}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">{t.desc}</p>
-                  <button
-                    onClick={() => useTemplate(t)}
-                    className="mt-3 w-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium py-1.5 rounded-lg transition-colors"
-                  >
-                    Vorlage verwenden
-                  </button>
-                </div>
+                <button
+                  onClick={() => setUsedTemplate(t.id)}
+                  className={`text-xs px-3 py-1 rounded-lg font-medium transition-all ${usedTemplate === t.id ? 'bg-green-100 text-green-700' : 'bg-violet-50 text-violet-600 hover:bg-violet-100'}`}
+                >
+                  {usedTemplate === t.id ? 'Verwendet' : 'Verwenden'}
+                </button>
               </div>
-            ))}
+            </div>
           </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
-  );
+  )
 }
