@@ -1,134 +1,116 @@
-import { useState } from 'react';
-import { Plus, X, Zap } from 'lucide-react';
+import { useState } from 'react'
+import { Plus, Network } from 'lucide-react'
+import type { Mindmap, MindmapNode } from '../types'
 
-interface Node { id: string; label: string; x: number; y: number; color: string; parent?: string; }
-
-const COLORS = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#ef4444'];
-
-const defaultNodes: Node[] = [
-  { id: 'root', label: 'Mein Mindmap', x: 400, y: 280, color: '#6366f1' },
-  { id: '1', label: 'Idee 1', x: 200, y: 150, color: '#ec4899', parent: 'root' },
-  { id: '2', label: 'Idee 2', x: 600, y: 150, color: '#10b981', parent: 'root' },
-  { id: '3', label: 'Idee 3', x: 200, y: 400, color: '#f59e0b', parent: 'root' },
-  { id: '4', label: 'Idee 4', x: 600, y: 400, color: '#3b82f6', parent: 'root' },
-  { id: '5', label: 'Detail A', x: 80, y: 80, color: '#8b5cf6', parent: '1' },
-  { id: '6', label: 'Detail B', x: 720, y: 80, color: '#14b8a6', parent: '2' },
-];
+const defaultMindmaps: Mindmap[] = [
+  {
+    id: '1',
+    name: 'Marketing Strategie',
+    createdAt: '2026-06-18',
+    nodes: [
+      { id: 'root', label: 'Marketing', x: 300, y: 200, color: '#8b5cf6' },
+      { id: 'n1', label: 'Social Media', x: 150, y: 100, parentId: 'root', color: '#3b82f6' },
+      { id: 'n2', label: 'Content', x: 450, y: 100, parentId: 'root', color: '#10b981' },
+      { id: 'n3', label: 'SEO', x: 150, y: 300, parentId: 'root', color: '#f59e0b' },
+      { id: 'n4', label: 'Ads', x: 450, y: 300, parentId: 'root', color: '#ef4444' },
+      { id: 'n5', label: 'Instagram', x: 50, y: 60, parentId: 'n1', color: '#ec4899' },
+      { id: 'n6', label: 'TikTok', x: 200, y: 40, parentId: 'n1', color: '#6366f1' },
+    ],
+  },
+]
 
 export default function Mindmaps() {
-  const [nodes, setNodes] = useState<Node[]>(defaultNodes);
-  const [dragging, setDragging] = useState<string | null>(null);
-  const [offset, setOffset] = useState({ x: 0, y: 0 });
-  const [editing, setEditing] = useState<string | null>(null);
-  const [editVal, setEditVal] = useState('');
-  const [selected, setSelected] = useState<string | null>(null);
+  const [mindmaps, setMindmaps] = useState<Mindmap[]>(defaultMindmaps)
+  const [selected, setSelected] = useState<Mindmap>(defaultMindmaps[0])
+  const [selectedNode, setSelectedNode] = useState<string | null>(null)
 
-  const onMouseDown = (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    const node = nodes.find(n => n.id === id)!;
-    setDragging(id);
-    setSelected(id);
-    setOffset({ x: e.clientX - node.x, y: e.clientY - node.y });
-  };
-
-  const onMouseMove = (e: React.MouseEvent) => {
-    if (!dragging) return;
-    setNodes(prev => prev.map(n => n.id === dragging ? { ...n, x: e.clientX - offset.x, y: e.clientY - offset.y } : n));
-  };
-
-  const addNode = () => {
-    const parent = selected || 'root';
-    const parentNode = nodes.find(n => n.id === parent)!;
-    const newNode: Node = {
+  const addMindmap = () => {
+    const newMap: Mindmap = {
       id: Date.now().toString(),
-      label: 'Neue Idee',
-      x: parentNode.x + (Math.random() * 200 - 100),
-      y: parentNode.y + (Math.random() * 200 - 100),
-      color: COLORS[Math.floor(Math.random() * COLORS.length)],
-      parent,
-    };
-    setNodes(prev => [...prev, newNode]);
-    setSelected(newNode.id);
-  };
+      name: 'Neue Mindmap',
+      createdAt: new Date().toISOString().split('T')[0],
+      nodes: [{ id: 'root', label: 'Hauptidee', x: 300, y: 200, color: '#8b5cf6' }],
+    }
+    setMindmaps(prev => [...prev, newMap])
+    setSelected(newMap)
+  }
 
-  const deleteNode = (id: string) => {
-    if (id === 'root') return;
-    setNodes(prev => prev.filter(n => n.id !== id && n.parent !== id));
-    setSelected(null);
-  };
-
-  const startEdit = (id: string, label: string) => {
-    setEditing(id);
-    setEditVal(label);
-  };
-
-  const saveEdit = () => {
-    if (!editVal.trim()) { setEditing(null); return; }
-    setNodes(prev => prev.map(n => n.id === editing ? { ...n, label: editVal } : n));
-    setEditing(null);
-  };
+  const renderConnections = (nodes: MindmapNode[]) => {
+    return nodes
+      .filter(n => n.parentId)
+      .map(n => {
+        const parent = nodes.find(p => p.id === n.parentId)
+        if (!parent) return null
+        return (
+          <line
+            key={`${n.parentId}-${n.id}`}
+            x1={parent.x + 40} y1={parent.y + 16}
+            x2={n.x + 40} y2={n.y + 16}
+            stroke="#cbd5e1"
+            strokeWidth="2"
+          />
+        )
+      })
+  }
 
   return (
-    <div className="flex-1 flex flex-col bg-gray-50">
-      <div className="bg-white border-b border-gray-100 px-6 py-3 flex items-center justify-between">
-        <h1 className="font-bold text-gray-800">Mindmaps</h1>
-        <div className="flex gap-2">
-          {selected && selected !== 'root' && (
-            <button onClick={() => deleteNode(selected)} className="flex items-center gap-1.5 text-sm text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors">
-              <X size={15} /> Löschen
+    <div className="flex h-[calc(100vh-56px)]">
+      <div className="w-56 border-r border-slate-200 bg-white flex flex-col">
+        <div className="p-4 border-b border-slate-100">
+          <div className="flex items-center justify-between mb-3">
+            <span className="font-semibold text-slate-800 text-sm">Mindmaps</span>
+            <button onClick={addMindmap} className="p-1 hover:bg-violet-50 rounded-lg">
+              <Plus size={16} className="text-violet-600" />
             </button>
-          )}
-          <button onClick={addNode} className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors">
-            <Plus size={15} /> Knoten hinzufügen
-          </button>
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto p-3 space-y-1">
+          {mindmaps.map(mm => (
+            <button
+              key={mm.id}
+              onClick={() => setSelected(mm)}
+              className={`w-full text-left px-3 py-2 rounded-lg text-sm flex items-center gap-2 ${selected.id === mm.id ? 'bg-violet-50 text-violet-700' : 'text-slate-600 hover:bg-slate-50'}`}
+            >
+              <Network size={14} />
+              {mm.name}
+            </button>
+          ))}
         </div>
       </div>
-      <div className="text-xs text-gray-400 px-6 py-2 bg-white border-b border-gray-100">
-        Klicken zum Auswählen • Ziehen zum Verschieben • Doppelklick zum Bearbeiten • Knoten auswählen und dann "+ Knoten" für Verbindung
-      </div>
-      <div
-        className="flex-1 relative overflow-hidden cursor-default select-none"
-        onMouseMove={onMouseMove}
-        onMouseUp={() => setDragging(null)}
-        onClick={() => setSelected(null)}
-        style={{ background: 'radial-gradient(circle at center, #f8faff 0%, #f1f5f9 100%)' }}
-      >
-        {/* SVG connections */}
-        <svg className="absolute inset-0 w-full h-full pointer-events-none">
-          {nodes.filter(n => n.parent).map(n => {
-            const parent = nodes.find(p => p.id === n.parent);
-            if (!parent) return null;
-            return (
-              <line key={n.id}
-                x1={parent.x} y1={parent.y} x2={n.x} y2={n.y}
-                stroke={n.color} strokeWidth="2" strokeOpacity="0.5" strokeDasharray="4 2"
+
+      <div className="flex-1 bg-slate-50 overflow-hidden relative">
+        <div className="absolute top-4 left-4 bg-white rounded-xl px-4 py-2 shadow-sm border border-slate-100">
+          <span className="text-sm font-medium text-slate-700">{selected.name}</span>
+        </div>
+        <svg className="w-full h-full">
+          {renderConnections(selected.nodes)}
+          {selected.nodes.map(node => (
+            <g
+              key={node.id}
+              transform={`translate(${node.x}, ${node.y})`}
+              onClick={() => setSelectedNode(node.id)}
+              className="cursor-pointer"
+            >
+              <rect
+                width="80" height="32" rx="16"
+                fill={node.color}
+                opacity={selectedNode === node.id ? 1 : 0.85}
+                stroke={selectedNode === node.id ? '#fff' : 'none'}
+                strokeWidth="2"
               />
-            );
-          })}
+              <text
+                x="40" y="20"
+                textAnchor="middle"
+                fill="white"
+                fontSize="11"
+                fontWeight="500"
+              >
+                {node.label}
+              </text>
+            </g>
+          ))}
         </svg>
-        {/* Nodes */}
-        {nodes.map(node => (
-          <div
-            key={node.id}
-            className={`absolute transform -translate-x-1/2 -translate-y-1/2 rounded-xl px-4 py-2.5 text-white text-sm font-medium shadow-lg cursor-grab active:cursor-grabbing transition-shadow ${selected === node.id ? 'ring-2 ring-white ring-offset-2 shadow-xl' : 'hover:shadow-xl'}`}
-            style={{ left: node.x, top: node.y, background: node.color, minWidth: 80, textAlign: 'center' }}
-            onMouseDown={e => onMouseDown(e, node.id)}
-            onDoubleClick={e => { e.stopPropagation(); startEdit(node.id, node.label); }}
-          >
-            {editing === node.id ? (
-              <input
-                autoFocus
-                value={editVal}
-                onChange={e => setEditVal(e.target.value)}
-                onBlur={saveEdit}
-                onKeyDown={e => e.key === 'Enter' && saveEdit()}
-                className="bg-transparent outline-none text-white text-sm text-center w-full"
-                onClick={e => e.stopPropagation()}
-              />
-            ) : node.label}
-          </div>
-        ))}
       </div>
     </div>
-  );
+  )
 }
