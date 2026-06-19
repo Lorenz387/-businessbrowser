@@ -1,7 +1,8 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
 import {
   Home, FolderKanban, FileText, Folder, Pencil, MessageSquare,
-  Network, Image, BarChart3, Workflow, Layout, BookTemplate, Store, Zap
+  Network, Image, BarChart3, Workflow, Layout, BookTemplate, Store, Zap,
+  Video, Music, Link, User, Settings
 } from 'lucide-react'
 
 const navSections = [
@@ -21,6 +22,8 @@ const navSections = [
       { label: 'KI Chat', icon: MessageSquare, path: '/ki-chat' },
       { label: 'Mindmaps', icon: Network, path: '/mindmaps' },
       { label: 'Bild Generator', icon: Image, path: '/bild-generator' },
+      { label: 'Video Generator', icon: Video, path: '/video-generator' },
+      { label: 'Musik Generator', icon: Music, path: '/musik-generator' },
       { label: 'Analysen', icon: BarChart3, path: '/analysen' },
     ]
   },
@@ -36,6 +39,7 @@ const navSections = [
     items: [
       { label: 'Vorlagen', icon: BookTemplate, path: '/vorlagen' },
       { label: 'Marktplatz', icon: Store, path: '/marktplatz' },
+      { label: 'Verbindungen', icon: Link, path: '/verbindungen' },
     ]
   },
 ]

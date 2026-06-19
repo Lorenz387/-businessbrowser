@@ -1,75 +1,182 @@
-import { useState } from 'react';
-import { Sparkles, Play } from 'lucide-react';
+import { useState } from 'react'
+import { Sparkles, Play, Pause, Download, Clock } from 'lucide-react'
 
-const STYLES = ['Cinematic', 'Animation', 'Documentary', 'Short Reel', 'Tutorial'];
-const DURATIONS = ['15 Sek.', '30 Sek.', '60 Sek.', '3 Min.'];
+const styles = ['Cinematic', 'Animation', 'Documentary', 'Short Reel', 'Tutorial', 'Vlog']
+const durations = ['15 Sek.', '30 Sek.', '60 Sek.', '3 Min.', '5 Min.']
+const resolutions = ['720p', '1080p', '4K']
 
-interface GeneratedVideo { prompt: string; style: string; duration: string; gradient: string; }
+const gradients = [
+  'from-purple-600 to-blue-600',
+  'from-orange-500 to-red-600',
+  'from-green-500 to-teal-600',
+  'from-pink-500 to-violet-600',
+  'from-cyan-500 to-blue-600',
+  'from-yellow-500 to-orange-600',
+]
 
-const GRADIENTS = ['from-purple-600 to-blue-600', 'from-orange-500 to-red-500', 'from-green-500 to-teal-500', 'from-pink-500 to-violet-500'];
+interface GeneratedVideo {
+  id: string
+  prompt: string
+  style: string
+  duration: string
+  resolution: string
+  gradient: string
+  createdAt: string
+}
 
 export default function VideoGenerator() {
-  const [prompt, setPrompt] = useState('');
-  const [style, setStyle] = useState('Cinematic');
-  const [duration, setDuration] = useState('30 Sek.');
-  const [loading, setLoading] = useState(false);
-  const [videos, setVideos] = useState<GeneratedVideo[]>([]);
+  const [prompt, setPrompt] = useState('')
+  const [style, setStyle] = useState(styles[0])
+  const [duration, setDuration] = useState(durations[1])
+  const [resolution, setResolution] = useState(resolutions[1])
+  const [generating, setGenerating] = useState(false)
+  const [progress, setProgress] = useState(0)
+  const [videos, setVideos] = useState<GeneratedVideo[]>([])
+  const [playing, setPlaying] = useState<string | null>(null)
 
-  const generate = async () => {
-    if (!prompt.trim()) return;
-    setLoading(true);
-    await new Promise(r => setTimeout(r, 2000 + Math.random() * 1000));
-    setVideos(prev => [{ prompt: prompt.trim(), style, duration, gradient: GRADIENTS[prev.length % GRADIENTS.length] }, ...prev]);
-    setLoading(false);
-  };
+  const generate = () => {
+    if (!prompt.trim()) return
+    setGenerating(true)
+    setProgress(0)
+    const interval = setInterval(() => {
+      setProgress(p => {
+        if (p >= 100) { clearInterval(interval); return 100 }
+        return p + Math.random() * 15
+      })
+    }, 300)
+    setTimeout(() => {
+      clearInterval(interval)
+      setProgress(100)
+      const newVideo: GeneratedVideo = {
+        id: Date.now().toString(),
+        prompt,
+        style,
+        duration,
+        resolution,
+        gradient: gradients[Math.floor(Math.random() * gradients.length)],
+        createdAt: new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }),
+      }
+      setVideos(prev => [newVideo, ...prev])
+      setGenerating(false)
+      setProgress(0)
+    }, 3000)
+  }
 
   return (
-    <div className="flex-1 overflow-y-auto bg-gray-50 p-6">
-      <div className="max-w-3xl mx-auto">
-        <h1 className="text-2xl font-bold text-gray-800 mb-6">Video-Generator</h1>
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-6">
-          <div className="mb-4">
-            <label className="text-sm font-medium text-gray-700 mb-2 block">Video-Beschreibung</label>
-            <textarea value={prompt} onChange={e => setPrompt(e.target.value)} placeholder="Beschreibe das Video..." rows={3} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+    <div className="p-6">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-slate-800">Video Generator</h1>
+        <p className="text-slate-500 text-sm mt-1">Erstelle KI-Videos aus Text</p>
+      </div>
+
+      <div className="grid grid-cols-3 gap-6">
+        {/* Controls */}
+        <div className="space-y-4">
+          <div>
+            <label className="text-sm font-medium text-slate-700 block mb-2">Beschreibung</label>
+            <textarea
+              value={prompt}
+              onChange={e => setPrompt(e.target.value)}
+              placeholder="Beschreibe dein Video..."
+              className="w-full border border-slate-200 rounded-xl p-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-violet-500"
+              rows={4}
+            />
           </div>
-          <div className="grid grid-cols-2 gap-4 mb-4">
-            <div>
-              <label className="text-sm font-medium text-gray-700 mb-2 block">Stil</label>
-              <div className="flex flex-wrap gap-2">
-                {STYLES.map(s => <button key={s} onClick={() => setStyle(s)} className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-all ${style === s ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{s}</button>)}
-              </div>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-gray-700 mb-2 block">Länge</label>
-              <div className="flex flex-wrap gap-2">
-                {DURATIONS.map(d => <button key={d} onClick={() => setDuration(d)} className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-all ${duration === d ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{d}</button>)}
-              </div>
+
+          <div>
+            <label className="text-sm font-medium text-slate-700 block mb-2">Stil</label>
+            <div className="grid grid-cols-2 gap-2">
+              {styles.map(s => (
+                <button key={s} onClick={() => setStyle(s)}
+                  className={`text-xs py-2 px-3 rounded-lg border transition-all ${style === s ? 'bg-violet-600 text-white border-violet-600' : 'border-slate-200 text-slate-600 hover:border-violet-300'}`}>
+                  {s}
+                </button>
+              ))}
             </div>
           </div>
-          <button onClick={generate} disabled={!prompt.trim() || loading} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-6 py-2.5 rounded-xl text-sm font-medium transition-colors">
-            <Sparkles size={16} /> {loading ? 'Wird generiert...' : 'Video erstellen'}
+
+          <div>
+            <label className="text-sm font-medium text-slate-700 block mb-2">Länge</label>
+            <div className="flex gap-2 flex-wrap">
+              {durations.map(d => (
+                <button key={d} onClick={() => setDuration(d)}
+                  className={`text-xs py-2 px-3 rounded-lg border transition-all ${duration === d ? 'bg-violet-600 text-white border-violet-600' : 'border-slate-200 text-slate-600 hover:border-violet-300'}`}>
+                  {d}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="text-sm font-medium text-slate-700 block mb-2">Auflösung</label>
+            <div className="flex gap-2">
+              {resolutions.map(r => (
+                <button key={r} onClick={() => setResolution(r)}
+                  className={`text-xs py-2 px-3 rounded-lg border flex-1 transition-all ${resolution === r ? 'bg-violet-600 text-white border-violet-600' : 'border-slate-200 text-slate-600 hover:border-violet-300'}`}>
+                  {r}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <button onClick={generate} disabled={!prompt.trim() || generating}
+            className="w-full bg-gradient-to-r from-violet-600 to-purple-600 text-white py-3 rounded-xl text-sm font-medium flex items-center justify-center gap-2 hover:opacity-90 disabled:opacity-50 transition-opacity">
+            {generating ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Generiert... {Math.round(Math.min(progress, 99))}%
+              </>
+            ) : (
+              <><Sparkles size={16} /> Video Generieren</>
+            )}
           </button>
-        </div>
-        {videos.map((v, i) => (
-          <div key={i} className={`rounded-2xl bg-gradient-to-br ${v.gradient} p-6 mb-4 text-white relative overflow-hidden`}>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-semibold mb-1">{v.prompt}</p>
-                <p className="text-sm text-white/70">{v.style} • {v.duration}</p>
-              </div>
-              <button className="w-12 h-12 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center transition-colors">
-                <Play size={20} className="ml-1" />
-              </button>
+
+          {generating && (
+            <div className="w-full bg-slate-100 rounded-full h-2">
+              <div className="bg-gradient-to-r from-violet-500 to-purple-500 h-2 rounded-full transition-all" style={{ width: `${Math.min(progress, 100)}%` }} />
             </div>
+          )}
+        </div>
+
+        {/* Output */}
+        <div className="col-span-2">
+          {videos.length === 0 && !generating && (
+            <div className="flex flex-col items-center justify-center h-64 text-center border-2 border-dashed border-slate-200 rounded-2xl">
+              <Play size={40} className="text-slate-300 mb-3" />
+              <p className="text-slate-400 text-sm">Deine generierten Videos erscheinen hier</p>
+            </div>
+          )}
+          <div className="space-y-4">
+            {videos.map(video => (
+              <div key={video.id} className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm">
+                <div className={`h-40 bg-gradient-to-br ${video.gradient} relative flex items-center justify-center`}>
+                  <button
+                    onClick={() => setPlaying(playing === video.id ? null : video.id)}
+                    className="w-14 h-14 bg-white/30 hover:bg-white/50 backdrop-blur rounded-full flex items-center justify-center transition-all"
+                  >
+                    {playing === video.id
+                      ? <Pause size={22} className="text-white" />
+                      : <Play size={22} className="text-white ml-1" />}
+                  </button>
+                  <div className="absolute bottom-3 right-3 flex items-center gap-1 bg-black/40 text-white text-xs px-2 py-1 rounded-lg">
+                    <Clock size={11} /> {video.duration}
+                  </div>
+                  <div className="absolute top-3 left-3 bg-black/40 text-white text-xs px-2 py-1 rounded-lg">{video.resolution}</div>
+                </div>
+                <div className="p-4 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-slate-800 truncate max-w-xs">{video.prompt}</p>
+                    <p className="text-xs text-slate-400 mt-0.5">{video.style} · {video.createdAt}</p>
+                  </div>
+                  <button className="flex items-center gap-1.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-1.5 rounded-lg transition-colors">
+                    <Download size={13} /> Speichern
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
-        ))}
-        {videos.length === 0 && !loading && (
-          <div className="text-center py-16 text-gray-400">
-            <div className="text-6xl mb-3">🎬</div>
-            <p className="text-lg font-medium text-gray-500">Noch keine Videos</p>
-          </div>
-        )}
+        </div>
       </div>
     </div>
-  );
+  )
 }
