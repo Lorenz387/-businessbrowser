@@ -7,6 +7,7 @@ export interface Project {
   fileCount: number
   createdAt: string
   updatedAt: string
+  status?: string
 }
 
 export interface Document {

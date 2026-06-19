@@ -26,7 +26,10 @@ export default function RightSidebar() {
       </div>
 
       <div className="p-5">
-        <h3 className="font-semibold text-slate-800 mb-3">Verbindungen</h3>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-semibold text-slate-800">Verbindungen</h3>
+          <a href="/verbindungen" className="text-xs text-violet-600 hover:text-violet-700">Verwalten →</a>
+        </div>
         <div className="space-y-2">
           {connections.map(conn => (
             <div key={conn.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50">
