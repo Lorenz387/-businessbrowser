@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 // Load junisworld/.env (if present) before any module reads configuration.
 const envFile = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '.env')
 if (fs.existsSync(envFile)) process.loadEnvFile(envFile)
+if (process.argv.includes('--production')) process.env.NODE_ENV = 'production'
 
 const { createApp } = await import('./app.js')
 

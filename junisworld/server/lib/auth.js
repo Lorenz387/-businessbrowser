@@ -27,7 +27,8 @@ export function createSession(res, userId) {
   res.cookie(COOKIE, token, {
     httpOnly: true,
     sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    // Secure cookies need HTTPS; local http://localhost testing must keep working.
+    secure: process.env.NODE_ENV === 'production' && (process.env.APP_URL || '').startsWith('https://'),
     expires,
     path: '/',
   })

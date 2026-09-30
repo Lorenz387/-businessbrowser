@@ -11,7 +11,7 @@
     "dev:server": "node --disable-warning=ExperimentalWarning --watch server/index.js",
     "dev:client": "vite",
     "build": "vite build",
-    "start": "NODE_ENV=production node --disable-warning=ExperimentalWarning server/index.js",
+    "start": "node --disable-warning=ExperimentalWarning server/index.js --production",
     "test": "node --disable-warning=ExperimentalWarning --test server/test/*.test.js",
     "plan:set": "node --disable-warning=ExperimentalWarning scripts/set-plan.js",
     "lint": "oxlint src server"
