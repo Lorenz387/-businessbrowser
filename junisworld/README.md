@@ -10,7 +10,7 @@ Voraussetzung: Node.js ≥ 22.5 (nutzt das eingebaute `node:sqlite`).
 ```bash
 cd junisworld
 npm install
-cp .env.example .env        # Werte eintragen, dann exportieren (z. B. via direnv / Hosting-Umgebung)
+cp .env.example .env        # Werte eintragen — der Server liest junisworld/.env beim Start automatisch
 npm run dev                 # API :8787 + Vite :5173
 ```
 
