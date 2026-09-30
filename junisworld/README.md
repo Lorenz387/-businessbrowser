@@ -72,3 +72,11 @@ Persönlicher KI-Agent unter **Apps → PersonalAI** (`server/agent/`, `src/page
 - **Werkzeuge:** Befehle ausführen (PowerShell/bash), Dateien lesen/schreiben/auflisten, Webseiten laden, Merken (landet in Junis Memory).
 - **Freigaben:** `strict` (alles bestätigen), `ask` (Standard: Befehle und Schreiben bestätigen), `auto`.
 - **Sicherheit:** Befehle, Dateien und Web-Zugriff gibt es nur mit `PERSONALAI_TOOLS=on` **und** wenn der Browser auf demselben Rechner läuft (Loopback, kein Proxy-Header). Auf einem Server bleibt PersonalAI ein reiner Chat.
+
+## Apps: Barrierefreiheit-Scanner
+
+`server/apps/a11y/`, `src/pages/apps/Accessibility.jsx`. Crawlt bis zu 25 Seiten einer Domain, prüft statisches HTML auf 20 Regeln (Alternativtexte, Beschriftungen, Sprache, Überschriften, Zoom-Sperre, Linknamen, iframes, Inline-Kontraste …) und liefert je Fund einen Korrektur-Code. Wiederholung täglich/wöchentlich über den Scheduler, Benachrichtigung bei neuen kritischen Funden, CSV-Export. Abruf fremder Seiten mit SSRF-Schutz (`server/apps/safeFetch.js`; für lokale Tests `APPS_ALLOW_PRIVATE_FETCH=on`). Grenzen: kein JavaScript-Rendering, keine Kontraste aus Stylesheets, kein Konformitätsnachweis.
+
+## Apps: Fristen- & Kündigungsmanager
+
+`server/apps/contracts/`, `src/pages/apps/Contracts.jsx`. Verträge hochladen oder manuell anlegen; Junis AI liest Laufzeit, Frist, Verlängerung und Kosten mit wörtlichen Belegstellen aus (Übernahme nur nach Prüfung). Fristberechnung inkl. automatischer Verlängerungen, Erinnerungen 90/30/7 Tage vorher (einstellbar) in der App und per Slack-Webhook, Kalender-Export (.ics). E-Mail-Versand ist nicht eingebaut.

@@ -8,8 +8,10 @@ if (fs.existsSync(envFile)) process.loadEnvFile(envFile)
 if (process.argv.includes('--production')) process.env.NODE_ENV = 'production'
 
 const { createApp } = await import('./app.js')
+const { startScheduler } = await import('./apps/scheduler.js')
 
 const port = Number(process.env.PORT || 8787)
+startScheduler()
 createApp().listen(port, () => {
   console.log(`JunisWorld läuft auf http://localhost:${port}`)
   if (!process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN) console.log('Hinweis: ANTHROPIC_API_KEY fehlt — Junis-AI-Funktionen zeigen einen Einrichtungshinweis.')

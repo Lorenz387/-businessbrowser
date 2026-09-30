@@ -405,6 +405,45 @@ export async function analyzeDocument({ filename, mime, buffer, text, question }
   return textOf(msg)
 }
 
+// ---------- Contracts ----------
+
+const CONTRACT_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['title', 'counterparty', 'category', 'startDate', 'termEnd', 'noticeValue', 'noticeUnit', 'autoRenew', 'renewalMonths', 'costAmount', 'costInterval', 'evidence', 'uncertainties'],
+  properties: {
+    title: { type: 'string', description: 'Kurzer Vertragsname, z. B. "Mietvertrag Büro Hauptstraße"' },
+    counterparty: { type: 'string', description: 'Vertragspartner (nicht der Nutzer), leer wenn unklar' },
+    category: { type: 'string', enum: ['miete', 'software', 'leasing', 'versicherung', 'telekom', 'energie', 'dienstleistung', 'sonstiges'] },
+    startDate: { type: 'string', description: 'YYYY-MM-DD oder leer' },
+    termEnd: { type: 'string', description: 'Ende der aktuellen/ersten festen Laufzeit YYYY-MM-DD oder leer, wenn nicht bestimmbar' },
+    noticeValue: { type: 'integer', description: 'Kündigungsfrist als Zahl, -1 wenn nicht angegeben' },
+    noticeUnit: { type: 'string', enum: ['days', 'weeks', 'months'] },
+    autoRenew: { type: 'boolean', description: 'Verlängert sich der Vertrag automatisch?' },
+    renewalMonths: { type: 'integer', description: 'Verlängerungszeitraum in Monaten, 0 wenn keine automatische Verlängerung' },
+    costAmount: { type: 'number', description: 'Betrag pro Intervall in EUR, -1 wenn nicht angegeben' },
+    costInterval: { type: 'string', enum: ['monthly', 'quarterly', 'yearly', 'once'] },
+    evidence: { type: 'array', description: 'Wörtliche Zitate aus dem Vertrag, die Laufzeit, Frist, Verlängerung und Kosten belegen', items: { type: 'object', additionalProperties: false, required: ['field', 'quote'], properties: { field: { type: 'string' }, quote: { type: 'string' } } } },
+    uncertainties: { type: 'array', items: { type: 'string' }, description: 'Was unklar oder mehrdeutig ist und manuell geprüft werden sollte' },
+  },
+}
+
+/** Extract key contract terms. The result is a suggestion the user must confirm. */
+export async function extractContract({ filename, mime, buffer, text }) {
+  const content = []
+  if (mime === 'application/pdf') content.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: buffer.toString('base64') } })
+  else if (/^image\/(png|jpeg|gif|webp)$/.test(mime)) content.push({ type: 'image', source: { type: 'base64', media_type: mime, data: buffer.toString('base64') } })
+  else if (text) content.push({ type: 'text', text: `Vertrag „${filename}“:\n\n${text}` })
+  else throw new ApiError(415, 'unsupported', 'Dieser Dateityp kann nicht ausgelesen werden. Unterstützt: PDF, Bilder, Textdateien.')
+  content.push({ type: 'text', text: `Lies die Vertragsdaten aus. Heute ist ${new Date().toISOString().slice(0, 10)}. Erfinde nichts: Was nicht im Dokument steht, bleibt leer bzw. -1 und kommt in "uncertainties". Belege jede Angabe mit einem wörtlichen Zitat in "evidence". Keine Rechtsberatung.` })
+  const msg = await create({ max_tokens: 8000, system: BASE_SYSTEM, messages: [{ role: 'user', content }], output_config: { format: { type: 'json_schema', schema: CONTRACT_SCHEMA } } })
+  try {
+    return JSON.parse(textOf(msg))
+  } catch {
+    throw new ApiError(502, 'ai_error', 'Junis AI hat eine unlesbare Antwort geliefert. Bitte erneut versuchen.')
+  }
+}
+
 // ---------- Research ----------
 
 export async function research(userId, { question, depth }) {

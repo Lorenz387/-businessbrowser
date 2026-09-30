@@ -21,6 +21,8 @@ import { Creator, CreatorItemEditor, Marketplace, MarketplaceItem } from './page
 import { Legal, Help } from './pages/Legal.jsx'
 import Apps from './pages/Apps.jsx'
 import PersonalAI, { PersonalAISettings } from './pages/PersonalAI.jsx'
+import { AccessibilityHome, AccessibilitySite, AccessibilityScan } from './pages/apps/Accessibility.jsx'
+import { ContractsHome, ContractView } from './pages/apps/Contracts.jsx'
 
 function NotFound() {
   return (
@@ -93,6 +95,11 @@ export default function App() {
         <Route path="apps/personal-ai" element={<PersonalAI />} />
         <Route path="apps/personal-ai/settings" element={<PersonalAISettings />} />
         <Route path="apps/personal-ai/:id" element={<PersonalAI />} />
+        <Route path="apps/accessibility" element={<AccessibilityHome />} />
+        <Route path="apps/accessibility/sites/:id" element={<AccessibilitySite />} />
+        <Route path="apps/accessibility/scans/:scanId" element={<AccessibilityScan />} />
+        <Route path="apps/contracts" element={<ContractsHome />} />
+        <Route path="apps/contracts/:id" element={<ContractView />} />
         <Route path="settings" element={<Settings />} />
         <Route path="account" element={<Account />} />
         <Route path="billing" element={<Billing />} />

@@ -21,6 +21,7 @@
     "cookie-parser": "^1.4.7",
     "express": "^5.2.1",
     "multer": "^2.4.0",
+    "node-html-parser": "^9.0.4",
     "stripe": "^22.6.2"
   },
   "devDependencies": {

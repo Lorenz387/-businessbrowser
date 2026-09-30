@@ -218,9 +218,11 @@ export function Field({ label, hint, children, error, optional }) {
 }
 
 const INPUT = 'w-full rounded-lg border border-line bg-surface px-3 py-2 text-[14.5px] text-ink placeholder:text-faint focus:outline-none focus:border-accent focus:ring-3 focus:ring-accent/10 transition-colors'
-export const Input = ({ className, ...p }) => <input className={cx(INPUT, 'h-10', className)} {...p} />
-export const Textarea = ({ className, ...p }) => <textarea className={cx(INPUT, 'min-h-24 leading-relaxed', className)} {...p} />
-export const Select = ({ className, children, ...p }) => <select className={cx(INPUT, 'h-10 pr-8', className)} {...p}>{children}</select>
+// Let an explicit width class (w-auto, w-32, …) replace the default full width.
+const base = (className) => (/(^|\s)w-/.test(className || '') ? INPUT.replace('w-full ', '') : INPUT)
+export const Input = ({ className, ...p }) => <input className={cx(base(className), 'h-10', className)} {...p} />
+export const Textarea = ({ className, ...p }) => <textarea className={cx(base(className), 'min-h-24 leading-relaxed', className)} {...p} />
+export const Select = ({ className, children, ...p }) => <select className={cx(base(className), 'h-10 pr-8', className)} {...p}>{children}</select>
 
 export function Checkbox({ label, checked, onChange, description }) {
   return (
