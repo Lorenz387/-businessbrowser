@@ -11,6 +11,7 @@ import coreRoutes from './routes/core.js'
 import assistantRoutes from './routes/assistant.js'
 import accountRoutes from './routes/account.js'
 import orgRoutes from './routes/org.js'
+import agentRoutes from './agent/routes.js'
 import { PLANS } from './lib/plans.js'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
@@ -75,7 +76,7 @@ export function createApp() {
     res.json({ ...legal, complete: !!(legal.operator && legal.address && legal.email) })
   })
   app.use('/api/auth', authRoutes)
-  app.use('/api', requireAuth, coreRoutes, assistantRoutes, accountRoutes, orgRoutes)
+  app.use('/api', requireAuth, coreRoutes, assistantRoutes, accountRoutes, orgRoutes, agentRoutes)
   app.use('/api', (_req, _res, next) => next(new ApiError(404, 'not_found', 'Diese Schnittstelle existiert nicht.')))
 
   // Serve the built frontend in production.

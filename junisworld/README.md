@@ -62,3 +62,13 @@ Es gibt **keine Demodaten**. Leere Bereiche zeigen Empty States mit einer echten
 - Passwort-Reset per E-Mail (kein Mail-Versand konfiguriert).
 - Bezahlte Marketplace-Angebote, Credit-Nachkauf, Integrationen für Business.
 - Verbindung zu JunusWorld (eigenständiges Ökosystem, später anzubinden).
+
+## Apps: PersonalAI
+
+Persönlicher KI-Agent unter **Apps → PersonalAI** (`server/agent/`, `src/pages/PersonalAI.jsx`).
+
+- **Anbieter umschaltbar:** Claude (Anthropic SDK), OpenAI, xAI/Grok, Ollama (lokal) und beliebige OpenAI-kompatible Endpunkte. Schlüssel in der App oder in `.env` (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `XAI_API_KEY`).
+- **Profile:** eigene Anweisungen (Persönlichkeit), Modell, Werkzeuge, Freigabe-Modus, Workspace, Schrittlimit.
+- **Werkzeuge:** Befehle ausführen (PowerShell/bash), Dateien lesen/schreiben/auflisten, Webseiten laden, Merken (landet in Junis Memory).
+- **Freigaben:** `strict` (alles bestätigen), `ask` (Standard: Befehle und Schreiben bestätigen), `auto`.
+- **Sicherheit:** Befehle, Dateien und Web-Zugriff gibt es nur mit `PERSONALAI_TOOLS=on` **und** wenn der Browser auf demselben Rechner läuft (Loopback, kein Proxy-Header). Auf einem Server bleibt PersonalAI ein reiner Chat.

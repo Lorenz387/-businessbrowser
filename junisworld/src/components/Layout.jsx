@@ -19,6 +19,7 @@ const MAIN_NAV = [
   ['/knowledge', 'Knowledge'],
   ['/portfolio', 'Portfolio'],
   ['/junis', 'Junis AI'],
+  ['/apps', 'Apps'],
 ]
 const MORE_NAV = [
   ['/business', 'Business'],
@@ -137,6 +138,7 @@ const COMMANDS = [
   { label: 'Wochenrückblick', to: '/weekly', keywords: 'woche review' },
   { label: 'Notiz anlegen', to: '/knowledge?new=1', keywords: 'notiz knowledge wissen' },
   { label: 'Dokument hochladen', to: '/knowledge?tab=documents', keywords: 'dokument upload pdf' },
+  { label: 'PersonalAI öffnen', to: '/apps/personal-ai', keywords: 'agent personal ai code befehl' },
   { label: 'Tarif ändern', to: '/billing', keywords: 'abo billing tarif' },
   { label: 'Einstellungen', to: '/settings', keywords: 'settings einstellungen' },
 ]

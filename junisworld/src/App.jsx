@@ -19,6 +19,8 @@ import { Settings, Account, Billing } from './pages/Settings.jsx'
 import { Business, OrgView } from './pages/Business.jsx'
 import { Creator, CreatorItemEditor, Marketplace, MarketplaceItem } from './pages/Creator.jsx'
 import { Legal, Help } from './pages/Legal.jsx'
+import Apps from './pages/Apps.jsx'
+import PersonalAI, { PersonalAISettings } from './pages/PersonalAI.jsx'
 
 function NotFound() {
   return (
@@ -87,6 +89,10 @@ export default function App() {
         <Route path="portfolio" element={<Portfolio />} />
         <Route path="junis" element={<Junis />} />
         <Route path="junis/:id" element={<Junis />} />
+        <Route path="apps" element={<Apps />} />
+        <Route path="apps/personal-ai" element={<PersonalAI />} />
+        <Route path="apps/personal-ai/settings" element={<PersonalAISettings />} />
+        <Route path="apps/personal-ai/:id" element={<PersonalAI />} />
         <Route path="settings" element={<Settings />} />
         <Route path="account" element={<Account />} />
         <Route path="billing" element={<Billing />} />

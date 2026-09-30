@@ -5,7 +5,7 @@ const SAFE_URL = /^(https?:\/\/|\/|#|mailto:)/i
 
 function inline(text, keyBase = '') {
   const out = []
-  const re = /(`[^`]+`)|(\*\*[^*]+\*\*)|(\[[^\]]+\]\([^)\s]+\))|(\*[^*\s][^*]*\*)|(_[^_\s][^_]*_)/g
+  const re = /(`[^`]+`)|(\*\*[^*]+\*\*)|(\[[^\]]+\]\([^)\s]+\))|(\*[^*\s][^*]*\*)|((?<![\p{L}\p{N}])_[^_\s][^_]*_(?![\p{L}\p{N}]))/gu
   let last = 0
   let m
   let i = 0

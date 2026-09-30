@@ -325,7 +325,7 @@ r.post('/billing/resume', h(async (req, res) => {
 
 const USER_TABLES = ['profiles', 'user_skills', 'skill_history', 'skill_evidence', 'goals', 'lessons', 'practice_sessions', 'user_missions', 'projects',
   'documents', 'knowledge_items', 'memories', 'conversations', 'notifications', 'activity', 'subscriptions', 'career_paths', 'opportunities',
-  'research_reports', 'custom_skills', 'creator_items', 'enrollments', 'credit_ledger']
+  'research_reports', 'custom_skills', 'creator_items', 'enrollments', 'credit_ledger', 'agent_profiles', 'agent_conversations']
 
 r.get('/account/export', h(async (req, res) => {
   const userId = uid(req)
@@ -339,6 +339,9 @@ r.get('/account/export', h(async (req, res) => {
   const inP = projectIds.map(() => '?').join(',')
   data.project_tasks = projectIds.length ? all(`SELECT * FROM project_tasks WHERE project_id IN (${inP})`, ...projectIds) : []
   data.project_feedback = projectIds.length ? all(`SELECT * FROM project_feedback WHERE project_id IN (${inP})`, ...projectIds) : []
+  data.agent_providers = all('SELECT provider, base_url, default_model, updated_at FROM agent_providers WHERE user_id = ?', userId) // API keys are never exported
+  const agentConvIds = data.agent_conversations.map((c) => c.id)
+  data.agent_messages = agentConvIds.length ? all(`SELECT * FROM agent_messages WHERE conversation_id IN (${agentConvIds.map(() => '?').join(',')})`, ...agentConvIds) : []
   const convIds = data.conversations.map((c) => c.id)
   data.messages = convIds.length ? all(`SELECT * FROM messages WHERE conversation_id IN (${convIds.map(() => '?').join(',')})`, ...convIds) : []
   res.setHeader('Content-Disposition', `attachment; filename="junisworld-export-${new Date().toISOString().slice(0, 10)}.json"`)
