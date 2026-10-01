@@ -25,6 +25,13 @@ const APPS = [
     summary: 'Verträge als PDF hochladen, Laufzeiten und Kündigungsfristen per KI auslesen lassen und rechtzeitig vor der Verlängerung erinnert werden (in der App, per Slack, im Kalender).',
     to: '/apps/contracts',
   },
+  {
+    id: 'talent',
+    name: 'Junis Talent',
+    audience: 'Talente & Unternehmen',
+    summary: 'Einmal bewerben, KI-Fachinterview mit ausführlichem Feedback, anonymes Matching mit Proof of Skill. Unternehmen beschreiben die Stelle in eigenen Worten und erhalten bewertete, begründete Kandidatenlisten.',
+    to: '/apps/talent',
+  },
 ]
 
 const PLANNED = [
@@ -33,7 +40,6 @@ const PLANNED = [
   ['Makler-CRM', 'Immobilienmakler', 'Objekte, Interessenten, Besichtigungen und Exposés.'],
   ['Agentur-Reporting', 'Marketing- & SEO-Agenturen', 'White-Label-Kundenportal mit Performance-Daten.'],
   ['Cross-Border-Steuerhelfer', 'E-Commerce-Händler', 'Umsatzsteuer internationaler Verkäufe aufbereiten.'],
-  ['Büro-Assistent', 'Büro & Verwaltung', 'Umfang wird noch festgelegt.'],
   ['Recht', 'Rechtswissenschaften', 'Umfang wird noch festgelegt.'],
 ]
 

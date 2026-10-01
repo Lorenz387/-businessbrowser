@@ -80,3 +80,12 @@ Persönlicher KI-Agent unter **Apps → PersonalAI** (`server/agent/`, `src/page
 ## Apps: Fristen- & Kündigungsmanager
 
 `server/apps/contracts/`, `src/pages/apps/Contracts.jsx`. Verträge hochladen oder manuell anlegen; Junis AI liest Laufzeit, Frist, Verlängerung und Kosten mit wörtlichen Belegstellen aus (Übernahme nur nach Prüfung). Fristberechnung inkl. automatischer Verlängerungen, Erinnerungen 90/30/7 Tage vorher (einstellbar) in der App und per Slack-Webhook, Kalender-Export (.ics). E-Mail-Versand ist nicht eingebaut.
+
+## Apps: Junis Talent
+
+`server/apps/talent/`, `src/pages/apps/Talent.jsx`. Zwei Seiten in einer App:
+
+- **Talente:** Lebenslauf (PDF/Text) hochladen → Junis AI füllt das Profil vor; ca. 20-minütiges Fachinterview mit 7 auf den Werdegang zugeschnittenen Fragen (inkl. Prüfung einer fehlerhaften KI-Antwort), schriftlich oder per Spracheingabe im Browser, max. 3 Nachfragen, Wiederholung frühestens nach 7 Tagen. Danach vollständiges Feedback (Gesamtwert, 5 Dimensionen mit Belegen, Stärken, Entwicklungsfelder, Empfehlungen). Projekte entdecken, Interesse zeigen, Einladungen annehmen/ablehnen, Nachfrage je Fachgebiet aus echten offenen Ausschreibungen.
+- **Unternehmen:** Stelle in eigenen Worten beschreiben → Junis AI strukturiert Anforderungen (Pflicht/optional), Abgleich gegen den Pool mit nachvollziehbarem Score (Skills 45 %, Interview 25 %, Fachgebiet 15 %, Verfügbarkeit 10 %, Satz 5 %; fehlende Pflicht-Skills deckeln den Score). Kandidaten bleiben anonym, bis sie eine Einladung annehmen; Shortlist/Zusage erst danach.
+
+Proof of Skill: Skills zählen stärker, wenn sie im Interview belegt oder in JunisWorld verifiziert sind (abschaltbar). Keine Videos, keine Biometrie; KI-Werte sind Empfehlungen, Entscheidungen treffen Menschen. Nicht enthalten: Auszahlungen/Abrechnung zwischen Unternehmen und Talenten, RLHF-Aufgabenplattform, Video-Interviews.

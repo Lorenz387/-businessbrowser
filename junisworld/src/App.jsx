@@ -23,6 +23,7 @@ import Apps from './pages/Apps.jsx'
 import PersonalAI, { PersonalAISettings } from './pages/PersonalAI.jsx'
 import { AccessibilityHome, AccessibilitySite, AccessibilityScan } from './pages/apps/Accessibility.jsx'
 import { ContractsHome, ContractView } from './pages/apps/Contracts.jsx'
+import Talent, { TalentProject } from './pages/apps/Talent.jsx'
 
 function NotFound() {
   return (
@@ -100,6 +101,8 @@ export default function App() {
         <Route path="apps/accessibility/scans/:scanId" element={<AccessibilityScan />} />
         <Route path="apps/contracts" element={<ContractsHome />} />
         <Route path="apps/contracts/:id" element={<ContractView />} />
+        <Route path="apps/talent" element={<Talent />} />
+        <Route path="apps/talent/projects/:id" element={<TalentProject />} />
         <Route path="settings" element={<Settings />} />
         <Route path="account" element={<Account />} />
         <Route path="billing" element={<Billing />} />

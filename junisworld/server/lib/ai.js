@@ -486,3 +486,6 @@ Belege jede Tatsachenbehauptung mit einer gefundenen Quelle. Kennzeichne Aussage
   const list = [...sources.values()].map((s) => ({ ...s, cited: cited.has(s.url) })).sort((a, b) => Number(b.cited) - Number(a.cited))
   return { report: report.trim(), sources: list }
 }
+
+// Shared helpers for app-specific AI modules.
+export { create as aiCreate, structured as aiStructured, textOf as aiText, BASE_SYSTEM }
