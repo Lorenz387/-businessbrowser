@@ -1,6 +1,6 @@
 // Junis Talent: profiles, interviews, projects and explainable matching.
 import { db, one, all, run, parseJSON } from '../../db.js'
-import { notify, userSkills } from '../../lib/engine.js'
+import { notify, userSkills, skillCatalog } from '../../lib/engine.js'
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS talent_profiles (
@@ -86,7 +86,7 @@ export const latestInterview = (userId) => one("SELECT * FROM talent_interviews 
 
 const norm = (s) => String(s || '').toLowerCase().normalize('NFKD').replace(/[^\p{L}\p{N}+#. ]/gu, ' ').replace(/\s+/g, ' ').trim()
 const tokens = (s) => new Set(norm(s).split(' ').filter((t) => t.length > 1))
-function similar(a, b) {
+export function similar(a, b) {
   const na = norm(a)
   const nb = norm(b)
   if (!na || !nb) return 0
@@ -152,7 +152,7 @@ function upsertMatch(project, talentId, m) {
     return false
   }
   run("INSERT INTO talent_applications (project_id, talent_id, source, status, score, detail) VALUES (?, ?, 'match', 'matched', ?, ?)", project.id, talentId, m.score, JSON.stringify(m.detail))
-  notify(talentId, 'talent', `Neues passendes Projekt: ${project.title} (${project.company}) — Match ${m.score} %.`, { link: '/apps/talent?tab=offers', dedupeKey: `talent-match:${project.id}:${talentId}` })
+  notify(talentId, 'talent', `Neues passendes Projekt: ${project.title} (${project.company}) — Match ${m.score} %.`, { link: '/talent?tab=offers', dedupeKey: `talent-match:${project.id}:${talentId}` })
   return true
 }
 
@@ -217,4 +217,53 @@ export function talentCard(app, revealIdentity) {
     Object.assign(card, { name: u.name, email: u.email, summary: p.summary, experience: p.experience, education: p.education, location: p.location })
   }
   return card
+}
+
+/** Compact status for JunisWorld core pages (Home, Career, Skills): stage, open offers and market-based skill gaps. */
+export function talentSummary(userId) {
+  const profile = profileOut(one('SELECT * FROM talent_profiles WHERE user_id = ?', userId))
+  const interview = latestInterview(userId)
+  const evaluation = J(interview?.evaluation, null)
+  const inProgress = !!one("SELECT id FROM talent_interviews WHERE user_id = ? AND status = 'in_progress'", userId)
+  const stage = !profile?.headline || !profile.skills.length ? 'profile' : !interview ? 'interview' : !profile.in_pool ? 'pool' : 'ready'
+  const apps = all(`SELECT a.id, a.status, a.score, p.id AS project_id, p.title, p.company FROM talent_applications a JOIN talent_projects p ON p.id = a.project_id
+    WHERE a.talent_id = ? AND p.status = 'open' ORDER BY a.score DESC`, userId)
+  const offers = apps.filter((a) => ['matched', 'invited'].includes(a.status)).slice(0, 3)
+
+  // Skill gaps: requirements of open projects in the talent's fields that the talent cannot show yet.
+  const gaps = new Map()
+  if (profile) {
+    const rows = all("SELECT * FROM talent_projects WHERE status = 'open' AND owner_id != ? ORDER BY created_at DESC LIMIT 100", userId).map(projectOut)
+    const relevant = profile.domains.length ? rows.filter((p) => !p.domains.length || p.domains.some((d) => profile.domains.some((x) => similar(x, d)))) : rows
+    for (const p of relevant) {
+      for (const h of matchScore(p, userId, profile).detail.skills) {
+        if (h.source) continue
+        const key = norm(h.skill)
+        const g = gaps.get(key) || { name: h.skill, projects: 0, must: 0 }
+        g.projects++
+        if (h.importance === 'must') g.must++
+        gaps.set(key, g)
+      }
+    }
+  }
+  const catalog = gaps.size ? skillCatalog(userId) : []
+  const skillGaps = [...gaps.values()].sort((a, b) => b.must - a.must || b.projects - a.projects).slice(0, 5)
+    .map((g) => ({ ...g, skillId: catalog.find((s) => similar(s.name, g.name))?.id ?? null }))
+
+  const company = one(`SELECT COUNT(*) AS projects,
+      (SELECT COUNT(*) FROM talent_applications a JOIN talent_projects p ON p.id = a.project_id WHERE p.owner_id = ? AND p.status = 'open' AND a.status = 'interested') AS interested,
+      (SELECT COUNT(*) FROM talent_applications a JOIN talent_projects p ON p.id = a.project_id WHERE p.owner_id = ? AND p.status = 'open' AND a.status = 'accepted') AS accepted
+    FROM talent_projects WHERE owner_id = ? AND status = 'open'`, userId, userId, userId)
+
+  return {
+    stage,
+    inPool: !!profile?.in_pool,
+    interview: interview ? { overall: evaluation?.overall ?? null, completedAt: interview.completed_at, weaknesses: evaluation?.weaknesses?.slice(0, 3) || [] } : null,
+    interviewInProgress: inProgress,
+    invited: apps.filter((a) => a.status === 'invited').length,
+    matched: apps.filter((a) => a.status === 'matched').length,
+    offers,
+    skillGaps,
+    company,
+  }
 }

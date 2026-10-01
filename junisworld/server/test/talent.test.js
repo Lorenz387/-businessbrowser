@@ -74,14 +74,26 @@ test('pool matching is explainable, anonymous and consent-based', async () => {
   r = await firma('GET', `/api/apps/talent/projects/${pid}`)
   assert.equal(r.data.candidates[0].name, 'Anna Ärztin', 'identity revealed after acceptance')
 
+  // Core integration: summary for Home/Career with market-based skill gaps.
+  r = await firma('POST', '/api/apps/talent/company/projects', { company: 'KI-Labor GmbH', title: 'Pharmakologie-Review', domains: ['Medizin'], skills: [{ name: 'Pharmakologie', importance: 'must' }] })
+  r = await anna('GET', '/api/apps/talent/summary')
+  assert.equal(r.data.stage, 'ready')
+  assert.deepEqual(r.data.skillGaps.map((g) => [g.name, g.must]), [['Pharmakologie', 1]])
+  r = await firma('GET', '/api/apps/talent/summary')
+  assert.equal(r.data.stage, 'profile')
+  assert.equal(r.data.company.accepted, 1)
+  assert.equal(r.data.company.projects, 2)
+  r = await firma('GET', '/api/search?q=pharma')
+  assert.ok(r.data.results.some((x) => x.type === 'Ausschreibung' && x.href.startsWith('/talent/projects/')))
+
   // Other companies cannot see the candidates.
   r = await ben('GET', `/api/apps/talent/projects/${pid}`)
   assert.equal(r.status, 403)
 
   // Explore mode: Ben can signal interest himself.
   r = await ben('GET', '/api/apps/talent/explore')
-  assert.equal(r.data.projects.length, 1)
-  assert.ok(r.data.projects[0].match.score < 55)
+  assert.equal(r.data.projects.length, 2)
+  assert.ok(r.data.projects.find((x) => x.id === pid).match.score < 55)
   r = await ben('POST', `/api/apps/talent/projects/${pid}/interest`, { motivation: 'Ich lerne gerade Medizin-Grundlagen.' })
   assert.equal(r.status, 200)
   r = await firma('GET', `/api/apps/talent/projects/${pid}`)

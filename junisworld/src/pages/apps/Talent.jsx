@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { Link, Navigate, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api, get, post, patch, del } from '../../lib/api.js'
 import { useApi, useAction, useDocumentTitle } from '../../lib/hooks.js'
 import { euro } from '../../lib/format.js'
 import { LevelBars } from '../../components/charts.jsx'
+import { SkillGapList, useTalentSummary } from '../../components/TalentWidgets.jsx'
 import {
   Badge, Button, Card, Checkbox, EmptyState, ErrorState, Field, Input, InlineError, Loading, Modal, PageHeader, Progress, Section, Segmented, Select,
   Stat, Tabs, Textarea, useConfirm, useToast, cx,
@@ -15,25 +16,31 @@ const APP_STATUS = {
   declined: ['neutral', 'Abgelehnt'], shortlisted: ['ok', 'Shortlist'], rejected: ['neutral', 'Absage'], hired: ['ok', 'Zusage'],
 }
 const SOURCE = { verified: ['ok', 'JunisWorld-verifiziert'], interview: ['accent', 'im Interview belegt'], cv: ['neutral', 'laut Lebenslauf'] }
+/** Talent moved from /apps/talent into the JunisWorld core at /talent — keep old links (e.g. notifications) working. */
+export function LegacyTalentRedirect() {
+  const { pathname, search } = useLocation()
+  return <Navigate to={pathname.replace(/^\/apps\/talent/, '/talent') + search} replace />
+}
+
 const splitList = (s) => s.split(',').map((x) => x.trim()).filter(Boolean)
 
 export default function Talent() {
-  useDocumentTitle('Junis Talent')
+  useDocumentTitle('Talent')
   const [params, setParams] = useSearchParams()
   const side = params.get('side') || 'talent'
   return (
     <>
-      <PageHeader back={{ to: '/apps', label: 'Apps' }} title="Junis Talent"
+      <PageHeader title="Talent"
         subtitle="Einmal bewerben, dauerhaft passende Projekte erhalten — mit nachvollziehbarer Bewertung und voller Kontrolle über die eigenen Daten."
         actions={<Segmented value={side} onChange={(v) => setParams({ side: v })} options={[{ value: 'talent', label: 'Für Talente' }, { value: 'company', label: 'Für Unternehmen' }]} />} />
-      {side === 'talent' ? <TalentSide tab={params.get('tab') || 'profile'} setTab={(t) => setParams({ side: 'talent', tab: t })} /> : <CompanySide />}
+      {side === 'talent' ? <TalentSide params={params} tab={params.get('tab') || 'profile'} setTab={(t) => setParams({ side: 'talent', tab: t })} /> : <CompanySide />}
     </>
   )
 }
 
 // ======================= Talent =======================
 
-function TalentSide({ tab, setTab }) {
+function TalentSide({ tab, setTab, params }) {
   const { data, error, loading, reload, hardReload } = useApi('/apps/talent/me')
   if (loading) return <Loading />
   if (error) return <ErrorState error={error} what="Dein Talent-Profil" onRetry={hardReload} />
@@ -59,7 +66,7 @@ function TalentSide({ tab, setTab }) {
       ]} />
       {tab === 'profile' && <ProfileTab data={data} reload={reload} />}
       {tab === 'interview' && <InterviewTab data={data} reload={reload} />}
-      {tab === 'explore' && <ExploreTab />}
+      {tab === 'explore' && <ExploreTab initialQ={params.get('q') || ''} />}
       {tab === 'offers' && <OffersTab offers={data.offers} reload={reload} />}
       {tab === 'demand' && <DemandTab demand={data.demand} profile={p} />}
     </>
@@ -271,7 +278,7 @@ function InterviewResult({ evaluation: e, completedAt }) {
         <ul className="mt-2 space-y-2 text-sm">{e.dimensions.map((d) => <li key={d.name}><b>{d.name} ({d.score}):</b> {d.evidence}</li>)}</ul>
       </details>
       {e.skills?.length > 0 && <p className="text-sm mt-4">Im Interview belegt: {e.skills.map((s) => `${s.name} (${s.level})`).join(' · ')}</p>}
-      <p className="text-sm mt-3"><Link to="/learn" className="text-accent hover:underline">Entwicklungsfelder in JunisWorld gezielt trainieren →</Link></p>
+      <p className="text-sm mt-3"><Link to="/talent?tab=demand" className="text-accent hover:underline">Gefragte Skills, die dir fehlen</Link> · <Link to="/learn" className="text-accent hover:underline">Entwicklungsfelder in Learn trainieren →</Link></p>
     </>
   )
 }
@@ -289,9 +296,9 @@ function MatchBreakdown({ match }) {
   )
 }
 
-function ExploreTab() {
+function ExploreTab({ initialQ }) {
   const [type, setType] = useState('')
-  const [q, setQ] = useState('')
+  const [q, setQ] = useState(initialQ)
   const { data, error, loading, reload, hardReload } = useApi(`/apps/talent/explore?type=${type}&q=${encodeURIComponent(q)}`, [type, q])
   const [interest, setInterest] = useState(null)
   const [motivation, setMotivation] = useState('')
@@ -378,8 +385,16 @@ function DemandTab({ demand, profile }) {
           ))}
         </div>
       ) : <p className="text-sm text-muted">Derzeit keine offenen Projekte.</p>}
+      <p className="font-medium mt-6 mb-1">Gefragte Skills, die dir noch fehlen</p>
+      <p className="text-sm text-muted mb-2">Was offene Projekte in deinen Fachgebieten verlangen und du noch nicht belegen kannst — direkt im Skill Graph trainierbar.</p>
+      <TalentGaps />
     </Card>
   )
+}
+
+function TalentGaps() {
+  const { data } = useTalentSummary()
+  return data ? <SkillGapList gaps={data.skillGaps} /> : null
 }
 
 // ======================= Company =======================
@@ -399,7 +414,7 @@ function CompanySide() {
       {data.projects.length ? (
         <Card className="divide-y divide-line">
           {data.projects.map((p) => (
-            <Link key={p.id} to={`/apps/talent/projects/${p.id}`} className="flex flex-wrap items-center gap-3 px-4 py-3.5 hover:bg-subtle/60">
+            <Link key={p.id} to={`/talent/projects/${p.id}`} className="flex flex-wrap items-center gap-3 px-4 py-3.5 hover:bg-subtle/60">
               <div className="flex-1 min-w-48"><p className="font-medium">{p.title}</p><p className="text-xs text-muted">{p.company} · {p.typeLabel} · {p.status === 'open' ? 'offen' : 'geschlossen'}</p></div>
               <span className="text-sm text-muted">{(p.counts.matched || 0) + (p.counts.interested || 0)} Kandidaten · {p.counts.invited || 0} eingeladen · {(p.counts.accepted || 0) + (p.counts.shortlisted || 0)} angenommen</span>
             </Link>
@@ -407,7 +422,7 @@ function CompanySide() {
         </Card>
       ) : <EmptyState title="Noch keine Ausschreibung." text="Beschreibe in eigenen Worten, wen du suchst. Junis erstellt daraus ein Anforderungsprofil und eine bewertete Kandidatenliste." action={<Button variant="primary" onClick={() => setCreating(true)}>Projekt ausschreiben</Button>} />}
       <p className="text-xs text-muted mt-4">KI-Matching und Interview-Bewertungen sind Empfehlungen. Einladungen, Absagen und Zusagen triffst du — Bewerber werden nie automatisch abgelehnt.</p>
-      {creating && <ProjectForm data={data} onClose={() => setCreating(false)} onSaved={(id) => navigate(`/apps/talent/projects/${id}`)} />}
+      {creating && <ProjectForm data={data} onClose={() => setCreating(false)} onSaved={(id) => navigate(`/talent/projects/${id}`)} />}
     </>
   )
 }
@@ -482,12 +497,12 @@ export function TalentProject() {
   const remove = async () => {
     if (!(await confirm({ title: 'Ausschreibung löschen?', text: 'Die Ausschreibung und alle Kandidaten-Zuordnungen werden gelöscht.', confirmLabel: 'Löschen', danger: true }))) return
     await del(`/apps/talent/projects/${id}`)
-    navigate('/apps/talent?side=company')
+    navigate('/talent?side=company')
   }
   return (
     <div className="max-w-5xl">
       {dialog}
-      <PageHeader back={{ to: '/apps/talent?side=company', label: 'Ausschreibungen' }} title={data.title} subtitle={`${data.company} · ${data.typeLabel} · ${data.seniorityLabel} · ${data.status === 'open' ? 'offen' : 'geschlossen'}`}
+      <PageHeader back={{ to: '/talent?side=company', label: 'Ausschreibungen' }} title={data.title} subtitle={`${data.company} · ${data.typeLabel} · ${data.seniorityLabel} · ${data.status === 'open' ? 'offen' : 'geschlossen'}`}
         actions={<>
           <Button onClick={() => setEditing(true)}>Bearbeiten</Button>
           <Button onClick={() => patch(`/apps/talent/projects/${id}`, { status: data.status === 'open' ? 'closed' : 'open' }).then((r) => { toast(r.matches ? `${r.matches} neue Kandidaten gefunden.` : 'Gespeichert.'); reload() })}>{data.status === 'open' ? 'Schließen' : 'Wieder öffnen'}</Button>

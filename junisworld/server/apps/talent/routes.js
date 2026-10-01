@@ -9,7 +9,7 @@ import { consumeDaily } from '../../lib/usage.js'
 import { notify } from '../../lib/engine.js'
 import { parseCv, planInterview, interviewFollowUp, evaluateInterview, structureProject } from './ai.js'
 import {
-  TYPES, SENIORITY, profileOut, projectOut, latestInterview, matchScore, matchProject, matchTalent, demandByDomain, talentCard,
+  TYPES, SENIORITY, profileOut, projectOut, latestInterview, matchScore, matchProject, matchTalent, demandByDomain, talentCard, talentSummary,
 } from './service.js'
 
 const r = Router()
@@ -27,6 +27,8 @@ const getProfile = (userId) => profileOut(one('SELECT * FROM talent_profiles WHE
 const interviewOut = (i) => i && ({ ...i, turns: parseJSON(i.turns, []), plan: undefined, total: parseJSON(i.plan, []).length, evaluation: parseJSON(i.evaluation, null) })
 
 // =============== Talent side ===============
+
+r.get('/apps/talent/summary', h(async (req, res) => res.json(talentSummary(uid(req)))))
 
 r.get('/apps/talent/me', h(async (req, res) => {
   const userId = uid(req)
@@ -186,7 +188,7 @@ r.post('/apps/talent/projects/:id/interest', h(async (req, res) => {
   run(`INSERT INTO talent_applications (project_id, talent_id, source, status, score, detail, motivation) VALUES (?, ?, 'interest', 'interested', ?, ?, ?)
        ON CONFLICT(project_id, talent_id) DO UPDATE SET status = CASE WHEN status IN ('matched', 'declined') THEN 'interested' ELSE status END, motivation = excluded.motivation, updated_at = datetime('now')`,
   project.id, userId, m.score, JSON.stringify(m.detail), motivation)
-  notify(project.owner_id, 'talent', `Ein Talent hat Interesse an „${project.title}“ signalisiert.`, { link: `/apps/talent/projects/${project.id}`, dedupeKey: `talent-interest:${project.id}:${userId}` })
+  notify(project.owner_id, 'talent', `Ein Talent hat Interesse an „${project.title}“ signalisiert.`, { link: `/talent/projects/${project.id}`, dedupeKey: `talent-interest:${project.id}:${userId}` })
   res.json({ ok: true })
 }))
 
@@ -196,7 +198,7 @@ r.post('/apps/talent/applications/:id/respond', h(async (req, res) => {
   const decision = oneOf(req.body.decision, ['accept', 'decline'], { field: 'Entscheidung' })
   if (a.status !== 'invited' && decision === 'accept') throw badRequest('Du kannst nur Einladungen annehmen.')
   run("UPDATE talent_applications SET status = ?, updated_at = datetime('now') WHERE id = ?", decision === 'accept' ? 'accepted' : 'declined', a.id)
-  notify(a.owner_id, 'talent', decision === 'accept' ? `Einladung zu „${a.title}“ angenommen — Kontaktdaten sind jetzt sichtbar.` : `Ein Talent hat „${a.title}“ abgelehnt.`, { link: `/apps/talent/projects/${a.project_id}`, dedupeKey: `talent-respond:${a.id}:${decision}` })
+  notify(a.owner_id, 'talent', decision === 'accept' ? `Einladung zu „${a.title}“ angenommen — Kontaktdaten sind jetzt sichtbar.` : `Ein Talent hat „${a.title}“ abgelehnt.`, { link: `/talent/projects/${a.project_id}`, dedupeKey: `talent-respond:${a.id}:${decision}` })
   res.json({ ok: true })
 }))
 
@@ -299,7 +301,7 @@ r.patch('/apps/talent/applications/:id', h(async (req, res) => {
     rejected: `${a.company} hat sich bei „${a.title}“ für andere Profile entschieden. Dein Profil bleibt im Pool für weitere Projekte.`,
   }[status]
   if (msg && status !== a.status && (status !== 'rejected' || ['interested', 'invited', 'accepted', 'shortlisted'].includes(a.status))) {
-    notify(a.talent_id, 'talent', msg, { link: '/apps/talent?tab=offers', dedupeKey: `talent-status:${a.id}:${status}` })
+    notify(a.talent_id, 'talent', msg, { link: '/talent?tab=offers', dedupeKey: `talent-status:${a.id}:${status}` })
   }
   res.json({ ok: true })
 }))

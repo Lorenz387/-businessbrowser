@@ -30,7 +30,7 @@ export function Business() {
   return (
     <>
       <PageHeader title="Business" subtitle="Teams, Unternehmen und Familien. Persönliche Lerninhalte bleiben privat — Organisationen sehen nur, was Mitglieder ausdrücklich teilen."
-        actions={<Button variant="primary" onClick={() => setCreating(true)}>Organisation erstellen</Button>} />
+        actions={<><Button to="/talent?side=company">Talente finden</Button><Button variant="primary" onClick={() => setCreating(true)}>Organisation erstellen</Button></>} />
       {data.invites.length > 0 && (
         <Section title="Einladungen">
           <Card className="divide-y divide-line">

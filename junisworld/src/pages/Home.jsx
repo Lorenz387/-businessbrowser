@@ -5,6 +5,7 @@ import { greeting, formatDate, relative } from '../lib/format.js'
 import { useStartStep, STEP_TYPE_LABEL } from '../lib/steps.js'
 import { useJunis } from '../components/AskJunis.jsx'
 import { useAuth } from '../lib/auth.jsx'
+import { TalentHomeCard } from '../components/TalentWidgets.jsx'
 import { Button, Card, EmptyState, ErrorState, InlineError, Loading, PageHeader, Progress, Section, Badge } from '../components/ui.jsx'
 
 export default function Home() {
@@ -88,6 +89,8 @@ export default function Home() {
           </div>
         )}
       </Section>
+
+      <TalentHomeCard />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
         <Section title="Aktive Ziele" action={<Link to="/goals" className="text-sm text-muted hover:text-ink">Alle</Link>}>

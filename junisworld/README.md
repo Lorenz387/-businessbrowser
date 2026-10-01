@@ -81,9 +81,9 @@ Persönlicher KI-Agent unter **Apps → PersonalAI** (`server/agent/`, `src/page
 
 `server/apps/contracts/`, `src/pages/apps/Contracts.jsx`. Verträge hochladen oder manuell anlegen; Junis AI liest Laufzeit, Frist, Verlängerung und Kosten mit wörtlichen Belegstellen aus (Übernahme nur nach Prüfung). Fristberechnung inkl. automatischer Verlängerungen, Erinnerungen 90/30/7 Tage vorher (einstellbar) in der App und per Slack-Webhook, Kalender-Export (.ics). E-Mail-Versand ist nicht eingebaut.
 
-## Apps: Junis Talent
+## Talent (Kernbereich)
 
-`server/apps/talent/`, `src/pages/apps/Talent.jsx`. Zwei Seiten in einer App:
+`server/apps/talent/`, `src/pages/apps/Talent.jsx`, `src/components/TalentWidgets.jsx`. Fester Teil von JunisWorld unter `/talent` (eigener Menüpunkt; alte Links `/apps/talent…` werden umgeleitet). Eingebunden in Home (offene Einladungen/Treffer), Career (Status, Angebote, Entwicklungsfelder, gefragte Skills mit Link in den Skill Graph), Business („Talente finden“), globale Suche und Befehlspalette. Zwei Seiten:
 
 - **Talente:** Lebenslauf (PDF/Text) hochladen → Junis AI füllt das Profil vor; ca. 20-minütiges Fachinterview mit 7 auf den Werdegang zugeschnittenen Fragen (inkl. Prüfung einer fehlerhaften KI-Antwort), schriftlich oder per Spracheingabe im Browser, max. 3 Nachfragen, Wiederholung frühestens nach 7 Tagen. Danach vollständiges Feedback (Gesamtwert, 5 Dimensionen mit Belegen, Stärken, Entwicklungsfelder, Empfehlungen). Projekte entdecken, Interesse zeigen, Einladungen annehmen/ablehnen, Nachfrage je Fachgebiet aus echten offenen Ausschreibungen.
 - **Unternehmen:** Stelle in eigenen Worten beschreiben → Junis AI strukturiert Anforderungen (Pflicht/optional), Abgleich gegen den Pool mit nachvollziehbarem Score (Skills 45 %, Interview 25 %, Fachgebiet 15 %, Verfügbarkeit 10 %, Satz 5 %; fehlende Pflicht-Skills deckeln den Score). Kandidaten bleiben anonym, bis sie eine Einladung annehmen; Shortlist/Zusage erst danach.

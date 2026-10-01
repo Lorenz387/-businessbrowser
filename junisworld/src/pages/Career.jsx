@@ -5,6 +5,7 @@ import { useApi, useAction, useDocumentTitle } from '../lib/hooks.js'
 import { formatDate } from '../lib/format.js'
 import { AskJunisButton } from '../components/AskJunis.jsx'
 import { Roadmap } from '../components/charts.jsx'
+import { TalentCareerSection } from '../components/TalentWidgets.jsx'
 import {
   Badge, Button, Card, EmptyState, ErrorState, Field, Input, InlineError, Loading, Modal, PageHeader, Progress, Section, Select, Textarea,
   UpgradeNotice, StatusBadge, cx,
@@ -22,6 +23,7 @@ export function Career() {
   return (
     <>
       <PageHeader title="Career" subtitle="Karrierewege als konkrete Schritte — mit deinem gemessenen Stand an jedem Punkt. Junis zeigt Optionen, keine Erfolgsgarantien." />
+      <TalentCareerSection />
       {!data.enabled ? (
         <>
           <UpgradeNotice message="Career Intelligence ist Teil von Pro: Karrierewege mit Skill-Abgleich, Schritt-für-Schritt-Status und Chancen-Tracker." />
