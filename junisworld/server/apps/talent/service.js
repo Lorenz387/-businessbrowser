@@ -1,6 +1,7 @@
 // Junis Talent: profiles, interviews, projects and explainable matching.
 import { db, one, all, run, parseJSON } from '../../db.js'
 import { notify, userSkills, skillCatalog } from '../../lib/engine.js'
+import { canonicalSkill, getPack, skillOf } from './knowledge/index.js'
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS talent_profiles (
@@ -66,6 +67,19 @@ CREATE TABLE IF NOT EXISTS talent_applications (
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   UNIQUE (project_id, talent_id)
 );
+CREATE TABLE IF NOT EXISTS talent_assessments (
+  id INTEGER PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  pack TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  item TEXT NOT NULL,
+  score INTEGER,
+  passed INTEGER NOT NULL DEFAULT 0,
+  answer TEXT,
+  feedback TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_talent_assessments_user ON talent_assessments(user_id, pack, kind, item);
 `)
 
 export const TYPES = { expert_ai_training: 'KI-Training (Experten)', freelance: 'Freelance-Projekt', employment: 'Festanstellung' }
@@ -87,6 +101,8 @@ export const latestInterview = (userId) => one("SELECT * FROM talent_interviews 
 const norm = (s) => String(s || '').toLowerCase().normalize('NFKD').replace(/[^\p{L}\p{N}+#. ]/gu, ' ').replace(/\s+/g, ' ').trim()
 const tokens = (s) => new Set(norm(s).split(' ').filter((t) => t.length > 1))
 export function similar(a, b) {
+  const ca = canonicalSkill(a)
+  if (ca && ca === canonicalSkill(b)) return 1
   const na = norm(a)
   const nb = norm(b)
   if (!na || !nb) return 0
@@ -104,7 +120,25 @@ export function talentEvidence(userId, profile) {
   const junis = profile.share_junis_skills
     ? userSkills(userId).filter((s) => s.status === 'verified' || s.status === 'evidenced').map((s) => ({ name: s.name, level: s.level, verified: s.status === 'verified' }))
     : []
-  return { cv: profile.skills, interview: evaluation?.skills || [], junis, evaluation }
+  return { cv: profile.skills, interview: evaluation?.skills || [], junis, evaluation, ...assessedSkills(userId) }
+}
+
+/** Skills proven by passed work samples (applied) and knowledge checks (knowledge) from industry packs. */
+export function assessedSkills(userId) {
+  const task = new Map()
+  const quiz = new Map()
+  for (const a of all('SELECT pack, kind, item, score FROM talent_assessments WHERE user_id = ? AND passed = 1 ORDER BY id', userId)) {
+    const pack = getPack(a.pack)
+    if (!pack) continue
+    if (a.kind === 'quiz') {
+      const sk = skillOf(pack, a.item)
+      if (sk) quiz.set(sk.name, { name: sk.name, score: a.score })
+    } else {
+      const t = pack.tasks.find((x) => x.id === a.item)
+      for (const id of t?.skills || []) task.set(skillOf(pack, id).name, { name: skillOf(pack, id).name, score: a.score, task: t.title })
+    }
+  }
+  return { task: [...task.values()], quiz: [...quiz.values()] }
 }
 
 /** Explainable match score 0–100 with its components. */
@@ -118,11 +152,13 @@ export function matchScore(project, userId, profile) {
     const w = r.importance === 'must' ? 2 : 1
     total += w
     const verified = ev.junis.find((s) => s.verified && similar(s.name, r.name))
+    const inTask = ev.task.find((s) => similar(s.name, r.name))
     const inInterview = ev.interview.find((s) => similar(s.name, r.name))
+    const inQuiz = ev.quiz.find((s) => similar(s.name, r.name))
     const inCv = ev.cv.find((s) => similar(s.name, r.name)) || ev.junis.find((s) => similar(s.name, r.name))
-    const value = verified ? 1 : inInterview ? 0.9 : inCv ? 0.6 : 0
+    const [source, value] = verified ? ['verified', 1] : inTask ? ['task', 0.95] : inInterview ? ['interview', 0.9] : inQuiz ? ['quiz', 0.75] : inCv ? ['cv', 0.6] : [null, 0]
     got += w * value
-    skillHits.push({ skill: r.name, importance: r.importance, source: verified ? 'verified' : inInterview ? 'interview' : inCv ? 'cv' : null })
+    skillHits.push({ skill: r.name, importance: r.importance, source })
   }
   const skillScore = total ? got / total : 0
   const domainScore = project.domains.length ? (project.domains.some((d) => profile.domains.some((x) => similar(x, d))) ? 1 : 0) : 0.5
@@ -205,6 +241,8 @@ export function talentCard(app, revealIdentity) {
     hourlyRate: p.hourly_rate,
     interview: ev.evaluation ? { overall: ev.evaluation.overall, dimensions: ev.evaluation.dimensions.map(({ name, score }) => ({ name, score })), skills: ev.evaluation.skills } : null,
     verifiedSkills: ev.junis.filter((s) => s.verified).map((s) => s.name),
+    workSamples: ev.task.map((s) => ({ skill: s.name, score: s.score, task: s.task })),
+    knowledgeChecks: ev.quiz.map((s) => ({ skill: s.name, score: s.score })),
     status: app.status,
     source: app.source,
     score: app.score,

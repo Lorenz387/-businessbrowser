@@ -327,7 +327,7 @@ r.post('/billing/resume', h(async (req, res) => {
 
 const USER_TABLES = ['profiles', 'user_skills', 'skill_history', 'skill_evidence', 'goals', 'lessons', 'practice_sessions', 'user_missions', 'projects',
   'documents', 'knowledge_items', 'memories', 'conversations', 'notifications', 'activity', 'subscriptions', 'career_paths', 'opportunities',
-  'research_reports', 'custom_skills', 'creator_items', 'enrollments', 'credit_ledger', 'agent_profiles', 'agent_conversations', 'a11y_sites', 'contracts', 'talent_interviews']
+  'research_reports', 'custom_skills', 'creator_items', 'enrollments', 'credit_ledger', 'agent_profiles', 'agent_conversations', 'a11y_sites', 'contracts', 'talent_interviews', 'talent_assessments']
 
 r.get('/account/export', h(async (req, res) => {
   const userId = uid(req)

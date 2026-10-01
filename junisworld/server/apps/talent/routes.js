@@ -7,7 +7,8 @@ import { h, str, int, oneOf, badRequest, notFound, forbidden } from '../../lib/h
 import { aiAvailable } from '../../lib/ai.js'
 import { consumeDaily } from '../../lib/usage.js'
 import { notify } from '../../lib/engine.js'
-import { parseCv, planInterview, interviewFollowUp, evaluateInterview, structureProject } from './ai.js'
+import { parseCv, planInterview, interviewFollowUp, evaluateInterview, structureProject, evaluateWorkSample } from './ai.js'
+import { PACKS, getPack, packOut, packsForDomains, quizOut, gradeQuiz, TASK_PASS } from './knowledge/index.js'
 import {
   TYPES, SENIORITY, profileOut, projectOut, latestInterview, matchScore, matchProject, matchTalent, demandByDomain, talentCard, talentSummary,
 } from './service.js'
@@ -91,9 +92,89 @@ r.delete('/apps/talent/profile', h(async (req, res) => {
   tx(() => {
     run('DELETE FROM talent_applications WHERE talent_id = ?', userId)
     run('DELETE FROM talent_interviews WHERE user_id = ?', userId)
+    run('DELETE FROM talent_assessments WHERE user_id = ?', userId)
     run('DELETE FROM talent_profiles WHERE user_id = ?', userId)
   })
   res.json({ ok: true })
+}))
+
+// ---- Branchenwissen: knowledge checks & work samples ----
+
+const RETRY_HOURS = 24
+const hoursSince = (ts) => (Date.now() - new Date(`${ts.replace(' ', 'T')}Z`).getTime()) / 36e5
+function packParam(req) {
+  const pack = getPack(req.params.pack)
+  if (!pack) throw notFound('Dieses Branchenpaket existiert nicht.')
+  return pack
+}
+function attemptsFor(userId, packId) {
+  const out = {}
+  for (const a of all('SELECT * FROM talent_assessments WHERE user_id = ? AND pack = ? ORDER BY id', userId, packId)) {
+    const key = `${a.kind}:${a.item}`
+    const cur = out[key] || { kind: a.kind, item: a.item, attempts: 0, passed: false, best: null }
+    cur.attempts++
+    cur.passed = cur.passed || !!a.passed
+    if (a.score != null) cur.best = Math.max(cur.best ?? 0, a.score)
+    cur.last = { score: a.score, passed: !!a.passed, at: a.created_at, answer: a.answer, feedback: parseJSON(a.feedback, null) }
+    out[key] = cur
+  }
+  return out
+}
+function retryBlocked(userId, packId, kind, item) {
+  const last = one('SELECT * FROM talent_assessments WHERE user_id = ? AND pack = ? AND kind = ? AND item = ? AND score IS NOT NULL ORDER BY id DESC LIMIT 1', userId, packId, kind, item)
+  if (last && !last.passed && hoursSince(last.created_at) < RETRY_HOURS) throw badRequest(`Ein neuer Versuch ist ${RETRY_HOURS} Stunden nach dem letzten möglich.`)
+}
+
+r.get('/apps/talent/knowledge', h(async (req, res) => {
+  const profile = getProfile(uid(req))
+  const recommended = packsForDomains(profile?.domains || []).map((p) => p.id)
+  res.json({ packs: Object.values(PACKS).map((p) => ({ id: p.id, name: p.name, intro: p.intro, roles: p.roles.length, tasks: p.tasks.length, checks: Object.keys(p.quizzes).length, recommended: recommended.includes(p.id) })) })
+}))
+
+r.get('/apps/talent/knowledge/:pack', h(async (req, res) => {
+  const pack = packParam(req)
+  res.json({ ...packOut(pack), attempts: attemptsFor(uid(req), pack.id), aiAvailable: aiAvailable(), quizPass: 80, taskPass: TASK_PASS, retryHours: RETRY_HOURS })
+}))
+
+r.get('/apps/talent/knowledge/:pack/quiz/:skill', h(async (req, res) => {
+  const pack = packParam(req)
+  const questions = quizOut(pack, req.params.skill)
+  if (!questions.length) throw notFound('Für diesen Skill gibt es keinen Wissens-Check.')
+  res.json({ skill: pack.skills.find((s) => s.id === req.params.skill).name, questions })
+}))
+
+r.post('/apps/talent/knowledge/:pack/quiz/:skill', h(async (req, res) => {
+  const userId = uid(req)
+  const pack = packParam(req)
+  if (!pack.quizzes[req.params.skill]) throw notFound('Für diesen Skill gibt es keinen Wissens-Check.')
+  retryBlocked(userId, pack.id, 'quiz', req.params.skill)
+  const answers = Array.isArray(req.body.answers) ? req.body.answers.map((a) => (Number.isInteger(a) ? a : null)) : []
+  if (answers.length !== pack.quizzes[req.params.skill].length || answers.some((a) => a == null)) throw badRequest('Bitte beantworte alle Fragen.')
+  const result = gradeQuiz(pack, req.params.skill, answers)
+  run("INSERT INTO talent_assessments (user_id, pack, kind, item, score, passed, answer) VALUES (?, ?, 'quiz', ?, ?, ?, ?)", userId, pack.id, req.params.skill, result.score, result.passed ? 1 : 0, JSON.stringify(answers))
+  if (result.passed) matchTalent(userId)
+  res.json(result)
+}))
+
+r.post('/apps/talent/knowledge/:pack/tasks/:task', h(async (req, res) => {
+  const userId = uid(req)
+  const pack = packParam(req)
+  const task = pack.tasks.find((t) => t.id === req.params.task)
+  if (!task) throw notFound('Diese Arbeitsprobe existiert nicht.')
+  const answer = str(req.body.answer, { required: true, max: 12000, field: 'Antwort' })
+  if (answer.length < 40) throw badRequest('Die Antwort ist zu kurz für eine Bewertung.')
+  const reveal = { sample: task.sample, rubric: task.rubric }
+  if (!aiAvailable()) {
+    run("INSERT INTO talent_assessments (user_id, pack, kind, item, answer) VALUES (?, ?, 'task', ?, ?)", userId, pack.id, task.id, answer)
+    return res.json({ graded: false, ...reveal })
+  }
+  retryBlocked(userId, pack.id, 'task', task.id)
+  consumeDaily(userId, 'ai_messages')
+  const ev = await evaluateWorkSample(pack, task, answer)
+  const passed = ev.score >= TASK_PASS
+  run("INSERT INTO talent_assessments (user_id, pack, kind, item, score, passed, answer, feedback) VALUES (?, ?, 'task', ?, ?, ?, ?, ?)", userId, pack.id, task.id, ev.score, passed ? 1 : 0, answer, JSON.stringify(ev))
+  if (passed) matchTalent(userId)
+  res.json({ graded: true, passed, ...ev, ...reveal })
 }))
 
 // ---- Interview ----
@@ -209,7 +290,8 @@ r.get('/apps/talent/company', h(async (req, res) => {
     ...projectOut(p),
     counts: Object.fromEntries(all('SELECT status, COUNT(*) AS n FROM talent_applications WHERE project_id = ? GROUP BY status', p.id).map((x) => [x.status, x.n])),
   }))
-  res.json({ projects, types: TYPES, seniority: SENIORITY, aiAvailable: aiAvailable(), poolSize: one('SELECT COUNT(*) AS n FROM talent_profiles WHERE in_pool = 1').n })
+  const templates = Object.values(PACKS).flatMap((p) => packOut(p).projectTemplates.map((t) => ({ ...t, id: `${p.id}:${t.id}`, domain: p.name })))
+  res.json({ projects, templates, types: TYPES, seniority: SENIORITY, aiAvailable: aiAvailable(), poolSize: one('SELECT COUNT(*) AS n FROM talent_profiles WHERE in_pool = 1').n })
 }))
 
 r.post('/apps/talent/company/structure', h(async (req, res) => {

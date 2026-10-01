@@ -1,6 +1,9 @@
 // AI functions for Junis Talent. All outputs are recommendations for humans, never automated decisions.
 import { ApiError } from '../../lib/http.js'
 import { aiCreate, aiStructured, aiText, BASE_SYSTEM } from '../../lib/ai.js'
+import { PACKS, packsForDomains, TASK_PASS } from './knowledge/index.js'
+
+const guideFor = (domains) => packsForDomains(domains).map((p) => p.interviewGuide).join('\n\n')
 
 const FAIR = `Fairness-Regeln: Bewerte ausschließlich berufsrelevante Kompetenzen und Belege. Ignoriere Alter, Geschlecht, Herkunft, Religion, Behinderung, Familienstand, Aussehen, Akzent und Sprachfehler. Keine Vermutungen über geschützte Merkmale. Erfinde keine Fakten über die Person.`
 
@@ -66,7 +69,8 @@ Anforderungen:
 - Fragen individuell auf den Werdegang zugeschnitten, offen formuliert, konkret.
 - Mischung: 2× experience (konkrete eigene Projekte), 2× domain (Fachwissen auf Expertenniveau), 1× problem_solving (realistische Fallaufgabe), 1× ai_review (bewerte eine kurze, plausibel klingende aber fehlerhafte KI-Antwort aus dem Fachgebiet — die KI-Antwort steht in der Frage), 1× motivation.
 - Keine Fragen zu Privatleben, Gesundheit, Herkunft, Familie, Religion, Alter.
-- Sprache: Deutsch.`
+- Sprache: Deutsch.
+${guideFor(profile.domains)}`
   const out = await aiStructured(BASE_SYSTEM, prompt, PLAN_SCHEMA, { maxTokens: 6000 })
   return out.questions.slice(0, 8)
 }
@@ -112,6 +116,8 @@ ${profileText(profile)}
 Interview:
 ${transcript.map((t, i) => `F${i + 1}: ${t.q}\nA${i + 1}: ${t.a || '(keine Antwort)'}`).join('\n\n')}
 
+${guideFor(profile.domains)}
+
 Bewerte jede Dimension 0–100 nur anhand der Antworten. Kurze oder fehlende Antworten führen zu niedrigeren Werten, aber ohne Spekulation über Gründe. Stärken und Schwächen konkret und wertschätzend formulieren.`
   const out = await aiStructured(BASE_SYSTEM, prompt, EVAL_SCHEMA, { maxTokens: 8000 })
   const clamp = (n) => Math.max(0, Math.min(100, Math.round(Number(n) || 0)))
@@ -138,6 +144,45 @@ const PROJECT_SCHEMA = {
 export async function structureProject(description) {
   const prompt = `Ein Unternehmen beschreibt in eigenen Worten, wen es sucht:
 """${description}"""
-Strukturiere das als Anforderungsprofil. Nur Anforderungen, die im Text stehen oder zwingend daraus folgen. Keine diskriminierenden Kriterien (Alter, Geschlecht, Herkunft …) übernehmen — falls vorhanden, ignorieren.`
+Strukturiere das als Anforderungsprofil. Nur Anforderungen, die im Text stehen oder zwingend daraus folgen. Keine diskriminierenden Kriterien (Alter, Geschlecht, Herkunft …) übernehmen — falls vorhanden, ignorieren.
+Wenn passend, verwende diese Skill-Bezeichnungen aus der Branchen-Taxonomie: ${Object.values(PACKS).flatMap((p) => p.skills.map((k) => k.name)).join(', ')}.`
   return aiStructured(BASE_SYSTEM, prompt, PROJECT_SCHEMA, { maxTokens: 4000 })
+}
+
+// ---------- Work samples (industry packs) ----------
+
+const SAMPLE_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['score', 'criteria', 'feedback'],
+  properties: {
+    score: { type: 'integer', description: '0–100' },
+    criteria: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['criterion', 'met', 'comment'], properties: { criterion: { type: 'string' }, met: { type: 'string', enum: ['ja', 'teilweise', 'nein'] }, comment: { type: 'string' } } } },
+    feedback: { type: 'string', description: '2–4 Sätze in Du-Form: was gut war, was fehlt, konkreter Tipp' },
+  },
+}
+
+export async function evaluateWorkSample(pack, task, answer) {
+  const prompt = `Bewerte eine Arbeitsprobe aus dem Bereich ${pack.name}. Das Ergebnis sieht die Person vollständig; es ist eine Empfehlung, keine Entscheidung.
+${FAIR}
+
+Aufgabe: ${task.title}
+${task.brief}
+${task.material.length ? `Material:\n${task.material.join('\n')}` : ''}
+Erwartetes Ergebnis: ${task.deliverable}
+
+Bewertungskriterien (jedes einzeln prüfen):
+${task.rubric.map((r, i) => `${i + 1}. ${r}`).join('\n')}
+
+Musterlösung (Referenz, andere gut begründete Lösungen sind ebenfalls richtig):
+${task.sample}
+
+${pack.interviewGuide}
+
+Antwort der Person:
+"""${answer}"""
+
+Score 0–100 nach Anteil erfüllter Kriterien und fachlicher Richtigkeit. ${TASK_PASS} oder mehr bedeutet: im Arbeitsalltag brauchbar.`
+  const out = await aiStructured(BASE_SYSTEM, prompt, SAMPLE_SCHEMA, { maxTokens: 4000 })
+  return { ...out, score: Math.max(0, Math.min(100, Math.round(Number(out.score) || 0))) }
 }

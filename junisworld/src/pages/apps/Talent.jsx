@@ -5,6 +5,7 @@ import { useApi, useAction, useDocumentTitle } from '../../lib/hooks.js'
 import { euro } from '../../lib/format.js'
 import { LevelBars } from '../../components/charts.jsx'
 import { SkillGapList, useTalentSummary } from '../../components/TalentWidgets.jsx'
+import TalentKnowledge from './TalentKnowledge.jsx'
 import {
   Badge, Button, Card, Checkbox, EmptyState, ErrorState, Field, Input, InlineError, Loading, Modal, PageHeader, Progress, Section, Segmented, Select,
   Stat, Tabs, Textarea, useConfirm, useToast, cx,
@@ -15,7 +16,7 @@ const APP_STATUS = {
   matched: ['accent', 'Passendes Projekt'], interested: ['accent', 'Interesse gezeigt'], invited: ['warn', 'Eingeladen'], accepted: ['ok', 'Angenommen'],
   declined: ['neutral', 'Abgelehnt'], shortlisted: ['ok', 'Shortlist'], rejected: ['neutral', 'Absage'], hired: ['ok', 'Zusage'],
 }
-const SOURCE = { verified: ['ok', 'JunisWorld-verifiziert'], interview: ['accent', 'im Interview belegt'], cv: ['neutral', 'laut Lebenslauf'] }
+const SOURCE = { verified: ['ok', 'JunisWorld-verifiziert'], task: ['ok', 'Arbeitsprobe bestanden'], interview: ['accent', 'im Interview belegt'], quiz: ['accent', 'Wissens-Check bestanden'], cv: ['neutral', 'laut Lebenslauf'] }
 /** Talent moved from /apps/talent into the JunisWorld core at /talent — keep old links (e.g. notifications) working. */
 export function LegacyTalentRedirect() {
   const { pathname, search } = useLocation()
@@ -60,12 +61,14 @@ function TalentSide({ tab, setTab, params }) {
       <Tabs value={tab} onChange={setTab} tabs={[
         { value: 'profile', label: 'Profil' },
         { value: 'interview', label: 'Interview' },
+        { value: 'knowledge', label: 'Branchenwissen' },
         { value: 'explore', label: 'Projekte entdecken' },
         { value: 'offers', label: 'Angebote', count: data.offers.filter((o) => ['matched', 'invited'].includes(o.status)).length },
         { value: 'demand', label: 'Nachfrage' },
       ]} />
       {tab === 'profile' && <ProfileTab data={data} reload={reload} />}
       {tab === 'interview' && <InterviewTab data={data} reload={reload} />}
+      {tab === 'knowledge' && <TalentKnowledge />}
       {tab === 'explore' && <ExploreTab initialQ={params.get('q') || ''} />}
       {tab === 'offers' && <OffersTab offers={data.offers} reload={reload} />}
       {tab === 'demand' && <DemandTab demand={data.demand} profile={p} />}
@@ -437,6 +440,12 @@ function ProjectForm({ data, project, onClose, onSaved }) {
   const ai = useAction()
   const save = useAction()
   const set = (x) => setF((y) => ({ ...y, ...x }))
+  const applyTemplate = (tid) => {
+    const t = data.templates?.find((x) => x.id === tid)
+    if (!t) return
+    setDescription(t.description)
+    set({ title: t.title, type: t.type, seniority: t.seniority, domains: t.domain, skills: t.skills, hoursPerWeek: t.hoursPerWeek ?? '' })
+  }
   const structure = () => ai.run(() => post('/apps/talent/company/structure', { description })).then((r) => set({ title: f.title || r.title, type: r.type, seniority: r.seniority, domains: r.domains.join(', '), languages: r.languages.join(', '), skills: r.skills })).catch(() => {})
   const submit = () => save.run(async () => {
     const body = { ...f, description, domains: splitList(f.domains), languages: splitList(f.languages), skills: f.skills.filter((s) => s.name.trim()) }
@@ -446,6 +455,11 @@ function ProjectForm({ data, project, onClose, onSaved }) {
   return (
     <Modal open onClose={onClose} title={project ? 'Ausschreibung bearbeiten' : 'Projekt ausschreiben'} width="max-w-2xl"
       footer={<><Button variant="ghost" onClick={onClose}>Abbrechen</Button><Button variant="primary" onClick={submit} loading={save.pending} disabled={!f.company.trim() || !f.title.trim()}>{project ? 'Speichern' : 'Ausschreiben & Pool abgleichen'}</Button></>}>
+      {!project && data.templates?.length > 0 && (
+        <Field label="Vorlage" optional hint="Branchenvorlagen mit typischen Anforderungen — alles danach anpassbar.">
+          {(id) => <Select id={id} defaultValue="" onChange={(e) => applyTemplate(e.target.value)}><option value="">Ohne Vorlage</option>{data.templates.map((t) => <option key={t.id} value={t.id}>{t.domain}: {t.title}</option>)}</Select>}
+        </Field>
+      )}
       <Field label="Wen suchst du? (in eigenen Worten)">{(id) => <Textarea id={id} value={description} onChange={(e) => setDescription(e.target.value)} className="min-h-28" placeholder="z. B. Wir suchen Ärztinnen und Ärzte mit Erfahrung in Innerer Medizin, die 10 Std./Woche KI-Antworten zu Diagnosen auf Richtigkeit prüfen. Englisch nötig, bis 95 €/Std." />}</Field>
       {data.aiAvailable && <Button size="sm" onClick={structure} loading={ai.pending} disabled={description.trim().length < 20}>{ai.pending ? 'Junis strukturiert …' : 'Anforderungen mit Junis ableiten'}</Button>}
       <InlineError error={ai.error} />
@@ -462,7 +476,7 @@ function ProjectForm({ data, project, onClose, onSaved }) {
           {f.skills.map((s, i) => (
             <div key={i} className="flex gap-2">
               <Input value={s.name} onChange={(e) => set({ skills: f.skills.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)) })} placeholder="Skill" aria-label="Skill" />
-              <Select value={s.importance} onChange={(e) => set({ skills: f.skills.map((x, j) => (j === i ? { ...x, importance: e.target.value } : x)) })} className="w-32" aria-label="Wichtigkeit"><option value="must">Pflicht</option><option value="nice">Wünschenswert</option></Select>
+              <Select value={s.importance} onChange={(e) => set({ skills: f.skills.map((x, j) => (j === i ? { ...x, importance: e.target.value } : x)) })} className="w-40 shrink-0" aria-label="Wichtigkeit"><option value="must">Pflicht</option><option value="nice">Wünschenswert</option></Select>
               <Button variant="ghost" onClick={() => set({ skills: f.skills.filter((_, j) => j !== i) })} aria-label="Entfernen">✕</Button>
             </div>
           ))}
@@ -529,6 +543,8 @@ export function TalentProject() {
             <MatchBreakdown match={{ detail: c.detail }} />
             {c.interview && <p className="text-xs text-muted mt-2">Interview: {c.interview.overall}/100 — {c.interview.dimensions.map((d) => `${d.name} ${d.score}`).join(' · ')}</p>}
             {c.verifiedSkills.length > 0 && <p className="text-xs text-ok mt-1">✓ Verifiziert über JunisWorld: {c.verifiedSkills.join(', ')}</p>}
+            {c.workSamples?.length > 0 && <p className="text-xs text-ok mt-1">✓ Arbeitsproben: {c.workSamples.map((w) => `${w.task} (${w.score} %)`).filter((x, i, a) => a.indexOf(x) === i).join(', ')}</p>}
+            {c.knowledgeChecks?.length > 0 && <p className="text-xs text-muted mt-1">Wissens-Checks bestanden: {c.knowledgeChecks.map((k) => `${k.skill} (${k.score} %)`).join(', ')}</p>}
             {c.motivation && <p className="text-sm mt-2 border-l-2 border-line pl-3">„{c.motivation}“</p>}
             {c.experience?.length > 0 && <ul className="text-sm mt-2">{c.experience.map((e, i) => <li key={i}>{e.title} · {e.org} ({e.from}–{e.to})</li>)}</ul>}
             <div className="flex flex-wrap gap-2 mt-3">

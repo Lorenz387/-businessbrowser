@@ -114,3 +114,49 @@ test('interview requires a profile and AI', async () => {
   r = await c('POST', '/api/apps/talent/interview')
   assert.equal(r.status, 503)
 })
+
+test('industry pack: knowledge checks and work samples become matching evidence', async () => {
+  const { PACKS } = await import('../apps/talent/knowledge/index.js')
+  const pack = PACKS.office
+  const tina = client()
+  const firma = client()
+  await tina('POST', '/api/auth/register', { email: 'tina@example.org', name: 'Tina', password: 'sehr-sicheres-passwort', acceptTerms: true })
+  await firma('POST', '/api/auth/register', { email: 'buero-hr@example.org', name: 'HR', password: 'sehr-sicheres-passwort', acceptTerms: true })
+  const tinaId = one('SELECT id FROM users WHERE email = ?', 'tina@example.org').id
+  await tina('PUT', '/api/apps/talent/profile', { headline: 'Büroassistenz', domains: ['Büro & Verwaltung'], skills: [{ name: 'Excel', years: 4 }], inPool: true })
+  run("INSERT INTO talent_interviews (user_id, status, evaluation, completed_at) VALUES (?, 'completed', ?, datetime('now'))", tinaId, evaluation(70, []))
+
+  let r = await tina('GET', '/api/apps/talent/knowledge')
+  assert.equal(r.data.packs.find((p) => p.id === 'office').recommended, true)
+  r = await tina('GET', '/api/apps/talent/knowledge/office')
+  assert.ok(r.data.facts.length >= 5 && r.data.roles.length >= 5 && r.data.tasks.length >= 5)
+  assert.equal(r.data.tasks[0].sample, undefined, 'sample solutions stay hidden')
+  r = await tina('GET', '/api/apps/talent/knowledge/office/quiz/mahnwesen')
+  assert.equal(r.data.questions[0].answer, undefined, 'answers stay hidden')
+
+  // Failed attempt blocks a retry for 24 hours.
+  const right = pack.quizzes.mahnwesen.map((q) => q.answer)
+  const wrong = right.map((a) => (a + 1) % 4)
+  r = await tina('POST', '/api/apps/talent/knowledge/office/quiz/mahnwesen', { answers: wrong })
+  assert.equal(r.data.passed, false)
+  assert.equal(r.data.results[0].explain.length > 0, true)
+  r = await tina('POST', '/api/apps/talent/knowledge/office/quiz/mahnwesen', { answers: right })
+  assert.equal(r.status, 400)
+  run("UPDATE talent_assessments SET created_at = datetime('now', '-2 days') WHERE user_id = ?", tinaId)
+  r = await tina('POST', '/api/apps/talent/knowledge/office/quiz/mahnwesen', { answers: right })
+  assert.equal(r.data.passed, true)
+  assert.equal(r.data.score, 100)
+
+  // Without AI a work sample is stored ungraded and the sample solution is shown for self-review.
+  r = await tina('POST', '/api/apps/talent/knowledge/office/tasks/rechnung', { answer: 'Es fehlen Rechnungsnummer, Steuernummer und Leistungsdatum; die Umsatzsteuer ist falsch berechnet.' })
+  assert.equal(r.data.graded, false)
+  assert.match(r.data.sample, /465,50/)
+
+  // A company asking for "Mahnwesen" (alias) sees the passed knowledge check as evidence.
+  r = await firma('POST', '/api/apps/talent/company/projects', { company: 'Kanzlei Ost', title: 'Assistenz Forderungsmanagement', domains: ['Büro'], skills: [{ name: 'Mahnwesen', importance: 'must' }, { name: 'Tabellenkalkulation', importance: 'nice' }] })
+  r = await firma('GET', `/api/apps/talent/projects/${r.data.id}`)
+  const card = r.data.candidates[0]
+  assert.equal(card.detail.skills[0].source, 'quiz')
+  assert.equal(card.detail.skills[1].source, 'cv', 'Excel matches Tabellenkalkulation via alias')
+  assert.equal(card.knowledgeChecks[0].skill, 'Debitorenmanagement & Mahnwesen')
+})

@@ -238,7 +238,7 @@ export function Checkbox({ label, checked, onChange, description }) {
 
 export function Segmented({ options, value, onChange, className }) {
   return (
-    <div className={cx('inline-flex rounded-lg border border-line bg-subtle p-0.5', className)} role="tablist">
+    <div className={cx('inline-flex max-w-full overflow-x-auto rounded-lg border border-line bg-subtle p-0.5', className)} role="tablist">
       {options.map((o) => (
         <button
           key={o.value}
@@ -246,7 +246,7 @@ export function Segmented({ options, value, onChange, className }) {
           role="tab"
           aria-selected={value === o.value}
           onClick={() => onChange(o.value)}
-          className={cx('px-3 h-8 text-sm rounded-md transition-colors', value === o.value ? 'bg-surface shadow-sm text-ink font-medium' : 'text-muted hover:text-ink')}
+          className={cx('px-3 h-8 text-sm rounded-md whitespace-nowrap shrink-0 transition-colors', value === o.value ? 'bg-surface shadow-sm text-ink font-medium' : 'text-muted hover:text-ink')}
         >
           {o.label}
         </button>
