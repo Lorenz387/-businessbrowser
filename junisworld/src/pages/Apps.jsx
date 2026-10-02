@@ -25,6 +25,13 @@ const APPS = [
     summary: 'Verträge als PDF hochladen, Laufzeiten und Kündigungsfristen per KI auslesen lassen und rechtzeitig vor der Verlängerung erinnert werden (in der App, per Slack, im Kalender).',
     to: '/apps/contracts',
   },
+  {
+    id: 'gastro',
+    name: 'GastroFlow',
+    audience: 'Restaurants & Gastronomie',
+    summary: 'Restaurant-Betriebssystem: Reservierungen mit automatischer Tischvergabe, Gäste-CRM, Speisekarte mit Wareneinsatz und Allergenen, Lager & Rezepte, Schichtplanung aus Reservierungen, Kassen-Webhook und KI-Kochstudio.',
+    to: '/apps/gastro',
+  },
 ]
 
 const PLANNED = [

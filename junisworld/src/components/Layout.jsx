@@ -142,6 +142,7 @@ const COMMANDS = [
   { label: 'Talent-Profil öffnen', to: '/talent', keywords: 'talent job jobs freelance lebenslauf cv bewerbung' },
   { label: 'Fachinterview starten', to: '/talent?tab=interview', keywords: 'interview talent bewerbung' },
   { label: 'Talente finden (Ausschreibung)', to: '/talent?side=company', keywords: 'recruiting stelle ausschreibung kandidaten hiring' },
+  { label: 'GastroFlow öffnen', to: '/apps/gastro', keywords: 'restaurant gastro reservierung tisch speisekarte küche' },
   { label: 'PersonalAI öffnen', to: '/apps/personal-ai', keywords: 'agent personal ai code befehl' },
   { label: 'Tarif ändern', to: '/billing', keywords: 'abo billing tarif' },
   { label: 'Einstellungen', to: '/settings', keywords: 'settings einstellungen' },

@@ -24,6 +24,7 @@ import PersonalAI, { PersonalAISettings } from './pages/PersonalAI.jsx'
 import { AccessibilityHome, AccessibilitySite, AccessibilityScan } from './pages/apps/Accessibility.jsx'
 import { ContractsHome, ContractView } from './pages/apps/Contracts.jsx'
 import Talent, { TalentProject, LegacyTalentRedirect } from './pages/apps/Talent.jsx'
+import { GastroHome, GastroWorkspace } from './pages/apps/gastro/GastroFlow.jsx'
 
 function NotFound() {
   return (
@@ -101,6 +102,9 @@ export default function App() {
         <Route path="apps/accessibility/scans/:scanId" element={<AccessibilityScan />} />
         <Route path="apps/contracts" element={<ContractsHome />} />
         <Route path="apps/contracts/:id" element={<ContractView />} />
+        <Route path="apps/gastro" element={<GastroHome />} />
+        <Route path="apps/gastro/:rid" element={<GastroWorkspace />} />
+        <Route path="apps/gastro/:rid/:section" element={<GastroWorkspace />} />
         <Route path="talent" element={<Talent />} />
         <Route path="talent/projects/:id" element={<TalentProject />} />
         <Route path="apps/talent" element={<LegacyTalentRedirect />} />
