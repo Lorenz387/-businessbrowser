@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import { handOverOrgRecords } from '../lib/workspace.js'
 import { audit } from '../lib/audit.js'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -94,7 +95,7 @@ r.get('/search', h(async (req, res) => {
   for (const p of all('SELECT id, title FROM projects WHERE user_id = ? AND (lower(title) LIKE ? OR lower(description) LIKE ?) LIMIT 5', userId, like, like)) results.push({ type: 'Projekt', title: p.title, href: `/projects/${p.id}` })
   for (const l of all('SELECT id, title FROM lessons WHERE user_id = ? AND (lower(title) LIKE ? OR lower(content) LIKE ?) LIMIT 5', userId, like, like)) results.push({ type: 'Lektion', title: l.title, href: `/learn/lessons/${l.id}` })
   for (const k of all('SELECT id, title, type FROM knowledge_items WHERE user_id = ? AND (lower(title) LIKE ? OR lower(content) LIKE ? OR lower(tags) LIKE ?) LIMIT 5', userId, like, like, like)) results.push({ type: 'Notiz', title: k.title, href: `/knowledge/${k.id}` })
-  for (const d of all('SELECT id, filename FROM documents WHERE user_id = ? AND (lower(filename) LIKE ? OR lower(summary) LIKE ?) LIMIT 5', userId, like, like)) results.push({ type: 'Dokument', title: d.filename, href: `/knowledge/documents/${d.id}` })
+  for (const d of all('SELECT id, filename FROM documents WHERE user_id = ? AND org_id IS NULL AND (lower(filename) LIKE ? OR lower(summary) LIKE ?) LIMIT 5', userId, like, like)) results.push({ type: 'Dokument', title: d.filename, href: `/knowledge/documents/${d.id}` })
   for (const p of all('SELECT id, title, company FROM talent_projects WHERE owner_id = ? AND (lower(title) LIKE ? OR lower(description) LIKE ?) LIMIT 5', userId, like, like)) results.push({ type: 'Ausschreibung', title: p.title, subtitle: p.company, href: `/talent/projects/${p.id}` })
   for (const p of all("SELECT id, title, company FROM talent_projects WHERE status = 'open' AND owner_id != ? AND (lower(title) LIKE ? OR lower(domains) LIKE ? OR lower(skills) LIKE ?) LIMIT 5", userId, like, like, like)) results.push({ type: 'Talent-Projekt', title: p.title, subtitle: p.company, href: `/talent?tab=explore&q=${encodeURIComponent(p.title)}` })
   for (const c of CAREER_PATHS.filter((c) => has(c.title) || has(c.field))) results.push({ type: 'Karriereweg', title: c.title, href: `/career/${c.id}` })
@@ -367,7 +368,8 @@ r.delete('/account', h(async (req, res) => {
     if (!stripe) throw billingUnavailable()
     await stripe.subscriptions.cancel(sub.stripe_subscription_id)
   }
-  for (const d of all('SELECT stored_name FROM documents WHERE user_id = ?', userId)) fs.rmSync(path.join(UPLOAD_DIR, d.stored_name), { force: true })
+  handOverOrgRecords(userId)
+  for (const d of all('SELECT stored_name FROM documents WHERE user_id = ? AND org_id IS NULL', userId)) fs.rmSync(path.join(UPLOAD_DIR, d.stored_name), { force: true })
   destroySession(req, res)
   run('DELETE FROM users WHERE id = ?', userId)
   res.json({ ok: true })

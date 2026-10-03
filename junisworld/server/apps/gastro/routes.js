@@ -10,6 +10,7 @@ import {
   suggestTable, tableConflict, staffing, revenue, feedbackStatus, assertDate, assertTime, num, addDays,
 } from './service.js'
 import { gastroAi, feedbackReply, AI_MODES } from './ai.js'
+import { appScope } from '../../lib/workspace.js'
 
 const r = Router()
 const uid = (req) => req.user.id
@@ -23,16 +24,21 @@ const validTz = (tz) => { try { new Intl.DateTimeFormat('de-DE', { timeZone: tz 
 // ---------- Restaurants & Einladungen ----------
 
 r.get('/apps/gastro', h(async (req, res) => {
-  const restaurants = all('SELECT r.*, m.role FROM gastro_restaurants r JOIN gastro_members m ON m.restaurant_id = r.id WHERE m.user_id = ? ORDER BY r.name', uid(req))
-    .map((x) => ({ ...restaurantOut(x), role: x.role }))
+  const sc = appScope(req, 'gastro')
+  const ids = sc.type === 'org'
+    ? all(`SELECT id FROM gastro_restaurants WHERE org_id = ? AND (id IN (SELECT restaurant_id FROM gastro_members WHERE user_id = ?) OR ?)`, sc.orgId, uid(req), sc.canWrite ? 1 : 0)
+    : all('SELECT r.id FROM gastro_restaurants r JOIN gastro_members m ON m.restaurant_id = r.id WHERE m.user_id = ? AND r.org_id IS NULL', uid(req))
+  const restaurants = ids.map(({ id }) => { const x = membership(req.user, id); return { ...restaurantOut(x.restaurant), role: x.role } }).sort((a, b) => a.name.localeCompare(b.name))
   const invites = all('SELECT i.id, i.role, r.name FROM gastro_invites i JOIN gastro_restaurants r ON r.id = i.restaurant_id WHERE lower(i.email) = lower(?)', req.user.email)
-  res.json({ restaurants, invites, roles: ROLES })
+  res.json({ restaurants, invites, roles: ROLES, canCreate: sc.canWrite, workspace: { type: sc.type, name: sc.orgName || null } })
 }))
 
 r.post('/apps/gastro', h(async (req, res) => {
+  const sc = appScope(req, 'gastro')
+  sc.requireWrite()
   const name = str(req.body.name, { required: true, max: 120, field: 'Name' })
   const id = tx(() => {
-    const rid = Number(run('INSERT INTO gastro_restaurants (owner_id, name, address, concept) VALUES (?, ?, ?, ?)', uid(req), name, str(req.body.address, { max: 200 }), str(req.body.concept, { max: 2000 })).lastInsertRowid)
+    const rid = Number(run('INSERT INTO gastro_restaurants (owner_id, org_id, name, address, concept) VALUES (?, ?, ?, ?, ?)', uid(req), sc.orgId, name, str(req.body.address, { max: 200 }), str(req.body.concept, { max: 2000 })).lastInsertRowid)
     run("INSERT INTO gastro_members (restaurant_id, user_id, role) VALUES (?, ?, 'owner')", rid, uid(req))
     return rid
   })
@@ -53,7 +59,7 @@ r.post('/apps/gastro/invites/:id/:action', h(async (req, res) => {
 // Every route below works inside one restaurant the user is a member of.
 r.use(base, (req, _res, next) => {
   try {
-    req.g = membership(uid(req), Number(req.params.rid))
+    req.g = membership(req.user, Number(req.params.rid))
     next()
   } catch (e) { next(e) }
 })

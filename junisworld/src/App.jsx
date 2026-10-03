@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { WorkspaceProvider } from './lib/workspace.jsx'
 import { useAuth } from './lib/auth.jsx'
 import Layout from './components/Layout.jsx'
 import { Button, ErrorState, Loading, PageHeader } from './components/ui.jsx'
@@ -65,6 +66,7 @@ export default function App() {
   }
 
   return (
+    <WorkspaceProvider>
     <Routes>
       <Route path="/login" element={<Navigate to="/" replace />} />
       <Route path="/register" element={<Navigate to="/" replace />} />
@@ -123,5 +125,6 @@ export default function App() {
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>
+    </WorkspaceProvider>
   )
 }

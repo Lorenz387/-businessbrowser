@@ -8,6 +8,7 @@ import { aiAvailable } from '../../lib/ai.js'
 import { consumeDaily } from '../../lib/usage.js'
 import { notify } from '../../lib/engine.js'
 import { parseCv, planInterview, interviewFollowUp, evaluateInterview, structureProject, evaluateWorkSample } from './ai.js'
+import { appScope, assertOrgApp, recipientsFor, orgRole, ORG_WRITE_ROLES } from '../../lib/workspace.js'
 import { PACKS, getPack, packOut, packsForDomains, quizOut, gradeQuiz, TASK_PASS } from './knowledge/index.js'
 import {
   TYPES, SENIORITY, profileOut, projectOut, latestInterview, matchScore, matchProject, matchTalent, demandByDomain, talentCard, talentSummary,
@@ -269,29 +270,31 @@ r.post('/apps/talent/projects/:id/interest', h(async (req, res) => {
   run(`INSERT INTO talent_applications (project_id, talent_id, source, status, score, detail, motivation) VALUES (?, ?, 'interest', 'interested', ?, ?, ?)
        ON CONFLICT(project_id, talent_id) DO UPDATE SET status = CASE WHEN status IN ('matched', 'declined') THEN 'interested' ELSE status END, motivation = excluded.motivation, updated_at = datetime('now')`,
   project.id, userId, m.score, JSON.stringify(m.detail), motivation)
-  notify(project.owner_id, 'talent', `Ein Talent hat Interesse an „${project.title}“ signalisiert.`, { link: `/talent/projects/${project.id}`, dedupeKey: `talent-interest:${project.id}:${userId}` })
+  for (const to of recipientsFor(project, 'owner_id')) notify(to, 'talent', `Ein Talent hat Interesse an „${project.title}“ signalisiert.`, { link: `/talent/projects/${project.id}${project.org_id ? `?ws=org:${project.org_id}` : ''}`, dedupeKey: `talent-interest:${project.id}:${userId}` })
   res.json({ ok: true })
 }))
 
 r.post('/apps/talent/applications/:id/respond', h(async (req, res) => {
-  const a = one('SELECT a.*, p.owner_id, p.title FROM talent_applications a JOIN talent_projects p ON p.id = a.project_id WHERE a.id = ? AND a.talent_id = ?', Number(req.params.id), uid(req))
+  const a = one('SELECT a.*, p.owner_id, p.org_id, p.title FROM talent_applications a JOIN talent_projects p ON p.id = a.project_id WHERE a.id = ? AND a.talent_id = ?', Number(req.params.id), uid(req))
   if (!a) throw notFound()
   const decision = oneOf(req.body.decision, ['accept', 'decline'], { field: 'Entscheidung' })
   if (a.status !== 'invited' && decision === 'accept') throw badRequest('Du kannst nur Einladungen annehmen.')
   run("UPDATE talent_applications SET status = ?, updated_at = datetime('now') WHERE id = ?", decision === 'accept' ? 'accepted' : 'declined', a.id)
-  notify(a.owner_id, 'talent', decision === 'accept' ? `Einladung zu „${a.title}“ angenommen — Kontaktdaten sind jetzt sichtbar.` : `Ein Talent hat „${a.title}“ abgelehnt.`, { link: `/talent/projects/${a.project_id}`, dedupeKey: `talent-respond:${a.id}:${decision}` })
+  for (const to of recipientsFor(a, 'owner_id')) notify(to, 'talent', decision === 'accept' ? `Einladung zu „${a.title}“ angenommen — Kontaktdaten sind jetzt sichtbar.` : `Ein Talent hat „${a.title}“ abgelehnt.`, { link: `/talent/projects/${a.project_id}${a.org_id ? `?ws=org:${a.org_id}` : ''}`, dedupeKey: `talent-respond:${a.id}:${decision}` })
   res.json({ ok: true })
 }))
 
 // =============== Company side ===============
 
 r.get('/apps/talent/company', h(async (req, res) => {
-  const projects = all('SELECT * FROM talent_projects WHERE owner_id = ? ORDER BY created_at DESC', uid(req)).map((p) => ({
+  const sc = appScope(req, 'talent')
+  const [w, prm] = sc.where('', 'owner_id')
+  const projects = (sc.canWrite ? all(`SELECT * FROM talent_projects WHERE ${w} ORDER BY created_at DESC`, ...prm) : []).map((p) => ({
     ...projectOut(p),
     counts: Object.fromEntries(all('SELECT status, COUNT(*) AS n FROM talent_applications WHERE project_id = ? GROUP BY status', p.id).map((x) => [x.status, x.n])),
   }))
   const templates = Object.values(PACKS).flatMap((p) => packOut(p).projectTemplates.map((t) => ({ ...t, id: `${p.id}:${t.id}`, domain: p.name })))
-  res.json({ projects, templates, types: TYPES, seniority: SENIORITY, aiAvailable: aiAvailable(), poolSize: one('SELECT COUNT(*) AS n FROM talent_profiles WHERE in_pool = 1').n })
+  res.json({ projects, templates, canWrite: sc.canWrite, workspace: { type: sc.type, name: sc.orgName || null }, types: TYPES, seniority: SENIORITY, aiAvailable: aiAvailable(), poolSize: one('SELECT COUNT(*) AS n FROM talent_profiles WHERE in_pool = 1').n })
 }))
 
 r.post('/apps/talent/company/structure', h(async (req, res) => {
@@ -321,18 +324,26 @@ function readProject(b, cur = {}) {
 }
 
 r.post('/apps/talent/company/projects', h(async (req, res) => {
+  const sc = appScope(req, 'talent')
+  sc.requireWrite()
   const p = readProject(req.body)
   if (!p.company || !p.title) throw badRequest('Unternehmen und Titel sind Pflichtfelder.')
   const cols = Object.keys(p)
-  const id = Number(run(`INSERT INTO talent_projects (owner_id, ${cols.join(', ')}) VALUES (?, ${cols.map(() => '?').join(', ')})`, uid(req), ...cols.map((c) => p[c])).lastInsertRowid)
+  const id = Number(run(`INSERT INTO talent_projects (owner_id, org_id, ${cols.join(', ')}) VALUES (?, ?, ${cols.map(() => '?').join(', ')})`, uid(req), sc.orgId, ...cols.map((c) => p[c])).lastInsertRowid)
   const matches = matchProject(one('SELECT * FROM talent_projects WHERE id = ?', id))
   res.status(201).json({ id, matches })
 }))
 
+/** Private projects: only the creator. Company projects: owners, admins and managers of the company. */
+function canManageProject(req, p) {
+  if (!p.org_id) return p.owner_id === uid(req)
+  return ORG_WRITE_ROLES.includes(orgRole(p.org_id, uid(req)))
+}
 function ownProject(req, id = req.params.id) {
   const p = one('SELECT * FROM talent_projects WHERE id = ?', Number(id))
   if (!p) throw notFound('Dieses Projekt existiert nicht.')
-  if (p.owner_id !== uid(req)) throw forbidden('Nur das ausschreibende Unternehmen sieht die Kandidaten.')
+  if (!canManageProject(req, p)) throw forbidden('Nur das ausschreibende Unternehmen sieht die Kandidaten.')
+  if (p.org_id) assertOrgApp(req.user, p.org_id, 'talent')
   return p
 }
 
@@ -372,7 +383,7 @@ r.delete('/apps/talent/projects/:id', h(async (req, res) => {
 
 r.patch('/apps/talent/applications/:id', h(async (req, res) => {
   const a = one('SELECT a.*, p.owner_id, p.title, p.company FROM talent_applications a JOIN talent_projects p ON p.id = a.project_id WHERE a.id = ?', Number(req.params.id))
-  if (!a || a.owner_id !== uid(req)) throw notFound()
+  if (!a || !canManageProject(req, one('SELECT * FROM talent_projects WHERE id = ?', a.project_id))) throw notFound()
   const status = oneOf(req.body.status, ['invited', 'shortlisted', 'rejected', 'hired', 'matched'], { fallback: a.status })
   if (status === 'hired' && !REVEALED.has(a.status) && a.status !== 'shortlisted') throw badRequest('Eine Zusage ist erst möglich, nachdem das Talent die Einladung angenommen hat.')
   if (status === 'shortlisted' && !REVEALED.has(a.status)) throw badRequest('Lade das Talent zuerst ein; nach Annahme kannst du es auf die Shortlist setzen.')

@@ -34,7 +34,7 @@ export function GastroHome() {
     <>
       <PageHeader back={{ to: '/apps', label: 'Apps' }} title="GastroFlow"
         subtitle="Restaurant-Betriebssystem: Reservierungen & Tischplan, Gäste, Speisekarte mit Wareneinsatz, Lager, Schichten, Kasse und KI-Kochstudio."
-        actions={<Button variant="primary" onClick={() => setCreating(true)}>Restaurant anlegen</Button>} />
+        actions={data.canCreate && <Button variant="primary" onClick={() => setCreating(true)}>Restaurant anlegen</Button>} />
       {data.invites.length > 0 && (
         <Card className="divide-y divide-line mb-6">
           {data.invites.map((i) => (
@@ -60,8 +60,8 @@ export function GastroHome() {
           ))}
         </div>
       ) : (
-        <EmptyState title="Noch kein Restaurant angelegt." text="Lege deinen Betrieb an. Alles startet leer — es werden keine Beispieldaten erzeugt. Teammitglieder lädst du danach mit Rollen (Betriebsleitung, Küche, Service) ein."
-          action={<Button variant="primary" onClick={() => setCreating(true)}>Restaurant anlegen</Button>} />
+        <EmptyState title={data.workspace?.type === 'org' && !data.canCreate ? 'Noch kein Restaurant für dich freigegeben.' : 'Noch kein Restaurant angelegt.'} text={data.workspace?.type === 'org' && !data.canCreate ? 'Im Firmenbereich legen Owner, Admins und Manager Restaurants an. Für Küche oder Service lädt dich die Restaurantleitung im Bereich Team ein.' : 'Lege deinen Betrieb an. Alles startet leer — es werden keine Beispieldaten erzeugt. Teammitglieder lädst du danach mit Rollen (Betriebsleitung, Küche, Service) ein.'}
+          action={data.canCreate && <Button variant="primary" onClick={() => setCreating(true)}>Restaurant anlegen</Button>} />
       )}
       {creating && <CreateRestaurant onClose={() => setCreating(false)} onCreated={(id) => navigate(`/apps/gastro/${id}`)} />}
     </>

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { post, patch, del } from '../../lib/api.js'
+import { post, patch, del, getWorkspace } from '../../lib/api.js'
 import { useApi, useAction, useDocumentTitle } from '../../lib/hooks.js'
 import { formatDateTime, relative } from '../../lib/format.js'
 import {
@@ -44,7 +44,7 @@ export function AccessibilityHome() {
     <>
       <PageHeader back={{ to: '/apps', label: 'Apps' }} title="Barrierefreiheit-Scanner"
         subtitle="Scannt Websites regelmäßig auf Barrieren nach WCAG und liefert zu jedem Fund den passenden Korrektur-Code."
-        actions={<Button variant="primary" onClick={() => setAdding(true)}>Website hinzufügen</Button>} />
+        actions={data.canWrite && <Button variant="primary" onClick={() => setAdding(true)}>Website hinzufügen</Button>} />
       <Card className="p-4 mb-6 text-sm text-ink-2">
         Automatische Prüfungen erkennen nur einen Teil der Barrieren (z. B. fehlende Alternativtexte, Beschriftungen, Sprachangaben). Tastaturbedienung, verständliche Inhalte und Kontraste aus CSS-Dateien müssen zusätzlich manuell geprüft werden. Ein gutes Ergebnis hier ist <b>kein Nachweis</b> der Konformität mit WCAG oder dem Barrierefreiheitsstärkungsgesetz.
       </Card>
@@ -62,7 +62,7 @@ export function AccessibilityHome() {
             </Link>
           ))}
         </Card>
-      ) : <EmptyState title="Noch keine Website." text="Füge eine Website hinzu — der erste Scan startet sofort." action={<Button variant="primary" onClick={() => setAdding(true)}>Website hinzufügen</Button>} />}
+      ) : <EmptyState title="Noch keine Website." text="Füge eine Website hinzu — der erste Scan startet sofort." action={data.canWrite && <Button variant="primary" onClick={() => setAdding(true)}>Website hinzufügen</Button>} />}
       <Modal open={adding} onClose={() => setAdding(false)} title="Website hinzufügen"
         footer={<><Button variant="ghost" onClick={() => setAdding(false)}>Abbrechen</Button><Button variant="primary" onClick={add} loading={action.pending} disabled={!f.url.trim()}>Hinzufügen & scannen</Button></>}>
         <Field label="Adresse">{(id) => <Input id={id} value={f.url} onChange={(e) => setF({ ...f, url: e.target.value })} placeholder="https://www.beispiel.de" />}</Field>
@@ -104,7 +104,7 @@ export function AccessibilitySite() {
     <div className="max-w-4xl">
       {dialog}
       <PageHeader back={{ to: '/apps/accessibility', label: 'Scanner' }} title={data.name} subtitle={data.url}
-        actions={<>
+        actions={data.canWrite && <>
           <Select value={data.schedule} onChange={(e) => patch(`/apps/a11y/sites/${id}`, { schedule: e.target.value }).then(reload)} className="w-auto h-9" aria-label="Wiederholung">
             {Object.entries(SCHEDULE).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </Select>
@@ -190,7 +190,7 @@ export function AccessibilityScan() {
   return (
     <div className="max-w-5xl">
       <PageHeader back={{ to: `/apps/accessibility/sites/${data.siteId}`, label: data.siteName }} title={`Scan vom ${formatDateTime(data.started_at)}`} subtitle={data.siteUrl}
-        actions={<Button href={`/api/apps/a11y/scans/${scanId}/export.csv`}>CSV exportieren</Button>} />
+        actions={<Button href={`/api/apps/a11y/scans/${scanId}/export.csv?ws=${getWorkspace()}`}>CSV exportieren</Button>} />
       <Card className="p-5 mb-6 grid grid-cols-2 sm:grid-cols-4 gap-6">
         <Stat label="Score" value={<ScoreBadge score={data.score} />} hint="Näherung, kein Konformitätsnachweis" />
         <Stat label="Funde" value={data.issues.length} />

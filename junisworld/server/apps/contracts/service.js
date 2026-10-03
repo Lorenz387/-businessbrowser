@@ -1,5 +1,6 @@
 // Contract lifecycle: deadline calculation, reminders (in-app, Slack webhook) and AI extraction.
 import { db, one, all, run, parseJSON } from '../../db.js'
+import { recipientsFor, addOrgColumn } from '../../lib/workspace.js'
 import { seal, unseal, isSealed } from '../../lib/secrets.js'
 import { notify } from '../../lib/engine.js'
 
@@ -39,6 +40,7 @@ CREATE TABLE IF NOT EXISTS contract_reminders (
   PRIMARY KEY (contract_id, deadline, days_before)
 );
 `)
+addOrgColumn('contracts')
 for (const x of all('SELECT user_id, slack_webhook FROM contract_settings WHERE slack_webhook IS NOT NULL')) {
   if (!isSealed(x.slack_webhook)) run('UPDATE contract_settings SET slack_webhook = ? WHERE user_id = ?', seal(x.slack_webhook), x.user_id)
 }
@@ -123,19 +125,24 @@ export async function sendDueReminders(today = todayUtc()) {
     run('INSERT INTO contract_reminders (contract_id, deadline, days_before) VALUES (?, ?, ?)', c.id, dl.cancelBy, offset)
     const cost = annualCost(c)
     const text = `Kündigungsfrist: „${c.title}“${c.counterparty ? ` (${c.counterparty})` : ''} muss bis ${fmtDate(dl.cancelBy)} gekündigt werden — noch ${dl.daysLeft} Tage.${c.auto_renew ? ` Sonst Verlängerung um ${c.renewal_months} Monate${cost ? ` (ca. ${cost.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })} pro Jahr)` : ''}.` : ''}`
-    notify(c.user_id, 'contract', text, { link: `/apps/contracts/${c.id}`, dedupeKey: `contract:${c.id}:${dl.cancelBy}:${offset}` })
-    const settings = one('SELECT slack_webhook FROM contract_settings WHERE user_id = ?', c.user_id)
-    if (settings?.slack_webhook) await postSlack(unseal(settings.slack_webhook), text)
+    const recipients = recipientsFor(c)
+    const hooks = new Set()
+    for (const userId of recipients) {
+      notify(userId, 'contract', c.org_id ? `[Firma] ${text}` : text, { link: `/apps/contracts/${c.id}${c.org_id ? `?ws=org:${c.org_id}` : ''}`, dedupeKey: `contract:${c.id}:${dl.cancelBy}:${offset}` })
+      const settings = one('SELECT slack_webhook FROM contract_settings WHERE user_id = ?', userId)
+      if (settings?.slack_webhook) hooks.add(unseal(settings.slack_webhook))
+    }
+    for (const hook of hooks) await postSlack(hook, text)
     sent++
   }
   return sent
 }
 
 /** iCalendar feed of cancellation deadlines. */
-export function icsFor(userId) {
+export function icsFor(where, params) {
   const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//JunisWorld//Fristen//DE', 'CALSCALE:GREGORIAN']
   const esc = (s) => String(s).replace(/[\\;,]/g, (m) => `\\${m}`).replace(/\n/g, '\\n')
-  for (const c of all("SELECT * FROM contracts WHERE user_id = ? AND status = 'active'", userId)) {
+  for (const c of all(`SELECT * FROM contracts WHERE ${where} AND status = 'active'`, ...params)) {
     const dl = deadlines(c)
     if (!dl.cancelBy) continue
     const day = dl.cancelBy.replace(/-/g, '')

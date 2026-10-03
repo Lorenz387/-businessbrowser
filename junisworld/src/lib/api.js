@@ -11,8 +11,17 @@ const listeners = new Set()
 /** Subscribe to 401 responses (session expired). */
 export const onUnauthorized = (fn) => (listeners.add(fn), () => listeners.delete(fn))
 
+// Current workspace ("private" or "org:<id>"), sent with every API call.
+let workspace = 'private'
+try { workspace = localStorage.getItem('jw_ws') || 'private' } catch { /* storage unavailable */ }
+export const getWorkspace = () => workspace
+export function setWorkspace(ws) {
+  workspace = ws || 'private'
+  try { localStorage.setItem('jw_ws', workspace) } catch { /* storage unavailable */ }
+}
+
 export async function api(path, { method = 'GET', body, form } = {}) {
-  const opts = { method, credentials: 'same-origin', headers: {} }
+  const opts = { method, credentials: 'same-origin', headers: { 'x-junis-workspace': workspace } }
   if (form) {
     opts.body = form
   } else if (method !== 'GET') {

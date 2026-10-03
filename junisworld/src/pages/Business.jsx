@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { post, patch, del } from '../lib/api.js'
+import { api, post, patch, del } from '../lib/api.js'
+import { useWorkspace } from '../lib/workspace.jsx'
 import { useApi, useAction, useDocumentTitle } from '../lib/hooks.js'
 import { formatDate, euro } from '../lib/format.js'
 import { useAuth, PLAN_NAMES } from '../lib/auth.jsx'
 import { LevelBars } from '../components/charts.jsx'
 import Markdown from '../components/Markdown.jsx'
 import {
-  Badge, Button, Card, EmptyState, ErrorState, Field, Input, InlineError, Loading, Modal, PageHeader, Section, Select, Segmented, Stat, Tabs, Textarea,
+  Badge, Button, Card, Checkbox, EmptyState, ErrorState, Field, Input, InlineError, Loading, Modal, PageHeader, Section, Select, Segmented, Stat, Tabs, Textarea,
   useConfirm, useToast,
 } from '../components/ui.jsx'
 
@@ -80,7 +81,7 @@ export function OrgView() {
   const [team, setTeam] = useState('')
   const { data, error, loading, reload, hardReload } = useApi(`/orgs/${id}${team ? `?team=${team}` : ''}`, [team])
   useDocumentTitle(data?.name)
-  const [tab, setTab] = useState('overview')
+  const [tab, setTab] = useState(() => new URLSearchParams(window.location.search).get('tab') || 'overview')
   const [confirm, dialog] = useConfirm()
   useEffect(() => { if (params.get('checkout') === 'success') { toast('Zahlung abgeschlossen. Der Tarif wird aktiv, sobald Stripe die Buchung bestätigt.'); refresh() } }, [params, toast, refresh])
   if (loading && !data) return <Loading />
@@ -93,6 +94,7 @@ export function OrgView() {
     { value: 'members', label: 'Mitglieder', count: data.members.length },
     ...(!family ? [{ value: 'programs', label: 'Lernprogramme', count: data.programs.length }, { value: 'knowledge', label: 'Wissen', count: data.knowledge.length }] : []),
     ...(isAdmin && !family ? [{ value: 'teams', label: 'Teams' }] : []),
+    ...(isAdmin && !family ? [{ value: 'security', label: 'Apps & Sicherheit' }] : []),
     ...(isAdmin ? [{ value: 'settings', label: 'Verwaltung' }] : []),
   ]
   const leave = async () => {
@@ -170,6 +172,7 @@ export function OrgView() {
       {tab === 'knowledge' && <OrgKnowledge org={data} isManager={isManager} reload={reload} />}
       {tab === 'teams' && <Teams org={data} reload={reload} />}
       {tab === 'settings' && <OrgSettings org={data} reload={reload} />}
+      {tab === 'security' && <OrgSecurity orgId={id} />}
     </div>
   )
 }
@@ -379,5 +382,62 @@ function OrgSettings({ org, reload }) {
       {org.role === 'owner' && <Button variant="danger" onClick={remove}>Organisation löschen</Button>}
       <InlineError error={action.error} />
     </div>
+  )
+}
+
+const AUDIT_TIME = (s) => new Date(`${s.replace(' ', 'T')}Z`).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+
+/** Company admins: which apps the company uses, 2FA obligation, audit log. */
+function OrgSecurity({ orgId }) {
+  const toast = useToast()
+  const { user } = useAuth()
+  const { data, error, loading, reload, hardReload } = useApi(`/orgs/${orgId}/security`)
+  const action = useAction()
+  const ws = useWorkspace()
+  if (loading) return <Loading />
+  if (error) return <ErrorState error={error} what="Die Sicherheitseinstellungen" onRetry={hardReload} />
+  const toggleApp = (a) => action.run(() => api(`/orgs/${orgId}/apps/${a.id}`, { method: 'PUT', body: { enabled: !a.enabled } })).then(() => { reload(); ws.reload() }).catch(() => {})
+  const setPolicy = (v) => action.run(() => api(`/orgs/${orgId}/policy`, { method: 'PUT', body: { require2fa: v } })).then(() => { toast(v ? 'Zwei-Faktor-Pflicht aktiviert.' : 'Zwei-Faktor-Pflicht aufgehoben.'); reload(); ws.reload() }).catch(() => {})
+  return (
+    <>
+      <Section title="Apps im Firmenbereich" description="Freigegebene Apps erscheinen für alle Mitglieder im Firmenbereich. Owner, Admins und Manager können Daten anlegen und ändern, Team Member lesen.">
+        <Card className="divide-y divide-line">
+          {data.apps.map((a) => (
+            <div key={a.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
+              <span className="flex-1 text-sm font-medium">{a.name}</span>
+              {a.orgCapable ? (
+                <>
+                  <Badge tone={a.enabled ? 'ok' : 'neutral'}>{a.enabled ? 'Freigegeben' : 'Gesperrt'}</Badge>
+                  <Button size="sm" variant={a.enabled ? 'ghost' : 'primary'} loading={action.pending} onClick={() => toggleApp(a)}>{a.enabled ? 'Sperren' : 'Freigeben'}</Button>
+                </>
+              ) : <span className="text-xs text-muted">Nur privat — persönliche Daten bleiben bei der Person</span>}
+            </div>
+          ))}
+        </Card>
+      </Section>
+      <Section title="Zwei-Faktor-Anmeldung">
+        <Card className="p-5">
+          <Checkbox label="Für alle Mitglieder verpflichtend" checked={data.require2fa} onChange={setPolicy}
+            description="Ohne aktive Zwei-Faktor-Anmeldung können Mitglieder den Firmenbereich nicht öffnen. Private Bereiche sind nicht betroffen." />
+          {!user.twoFactor && <p className="text-sm text-warn mt-2">Richte zuerst für dein eigenes Konto die Zwei-Faktor-Anmeldung ein (<Link to="/account" className="text-accent hover:underline">Account → Sicherheit</Link>).</p>}
+          {data.membersWithout2fa.length > 0
+            ? <p className="text-sm text-muted mt-3">Noch ohne Zwei-Faktor-Anmeldung: {data.membersWithout2fa.join(', ')}</p>
+            : <p className="text-sm text-ok mt-3">Alle Mitglieder nutzen die Zwei-Faktor-Anmeldung.</p>}
+          <InlineError error={action.error} />
+        </Card>
+      </Section>
+      <Section title="Protokoll" description="Änderungen an Mitgliedern, Rollen, Freigaben, Richtlinien und gelöschte Firmendaten.">
+        {data.audit.length ? (
+          <Card className="divide-y divide-line max-h-96 overflow-y-auto">
+            {data.audit.map((x) => (
+              <div key={x.id} className="flex flex-wrap gap-x-3 gap-y-0.5 px-4 py-2 text-sm">
+                <span className="flex-1 min-w-48">{x.label}{x.target ? `: ${x.target}` : ''}{x.meta?.enabled !== undefined ? (x.meta.enabled ? ' (freigegeben)' : ' (gesperrt)') : ''}{x.meta?.to ? ` (${x.meta.from} → ${x.meta.to})` : ''}</span>
+                <span className="text-xs text-muted">{x.user_name || 'Gelöschtes Konto'} · {AUDIT_TIME(x.created_at)}</span>
+              </div>
+            ))}
+          </Card>
+        ) : <p className="text-sm text-muted">Noch keine Einträge.</p>}
+      </Section>
+    </>
   )
 }

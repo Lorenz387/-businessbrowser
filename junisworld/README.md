@@ -100,3 +100,20 @@ Proof of Skill: Skills zählen stärker, wenn sie im Interview belegt oder in Ju
 ## KI-Anbieter: Claude oder Gemini
 
 Junis AI läuft wahlweise über Anthropic Claude (`ANTHROPIC_API_KEY`, Modell `JUNIS_MODEL`) oder Google Gemini (`GEMINI_API_KEY`, Modell `GEMINI_MODEL`, Standard `gemini-3.8-flash`). Ohne `JUNIS_AI_PROVIDER` wird Claude genutzt, wenn dessen Schlüssel gesetzt ist, sonst Gemini. `server/lib/gemini.js` übersetzt die Anfragen (Systemprompt, PDFs/Bilder, JSON-Schema-Ausgaben, Websuche → Google-Search-Grounding) und liefert Antworten im selben Format zurück; alle Funktionen (Lektionen, Interview, Verträge, Research, GastroFlow …) laufen unverändert. Unterschiede: Research-Quellen können bei Gemini Google-Weiterleitungslinks statt Originaladressen sein (ungeprüft); Qualität und Kosten wurden nicht mit echten Schlüsseln verglichen. PersonalAI kennt Gemini zusätzlich als eigenen Anbieter (OpenAI-kompatibler Endpunkt).
+
+## Fundament: Sicherheit & Firmen-Arbeitsbereiche
+
+**Sicherheit** (`server/lib/{secrets,totp,audit}.js`, `server/routes/auth.js`, Account → Sicherheit)
+- Zwei-Faktor-Anmeldung (TOTP nach RFC 6238, QR-Code, Schutz gegen Wiederverwendung von Codes, 10 Wiederherstellungscodes).
+- Sitzungen werden nur als SHA-256-Hash gespeichert; Geräteliste mit Abmelden einzeln oder aller anderen.
+- API-Schlüssel, Slack-Webhooks und 2FA-Schlüssel verschlüsselt (AES-256-GCM). Schlüssel: `JUNIS_SECRET_KEY` (64 Hex-Zeichen) oder automatisch `data/secret.key` — diese Datei sichern, sonst sind gespeicherte Geheimnisse nach einer Neuinstallation nicht mehr lesbar.
+- Sicherheitsprotokoll (Anmeldungen, Fehlversuche, 2FA, Sitzungen, Exporte) für Personen und Unternehmen.
+
+**Arbeitsbereiche** (`server/lib/workspace.js`, Umschalter oben rechts)
+- Jede Person arbeitet im **privaten Bereich** oder im **Bereich eines Unternehmens** (Organisation vom Typ Team/Unternehmen). Der Client sendet `X-Junis-Workspace: private | org:<id>`.
+- Fristen-Manager, Barrierefreiheit-Scanner, GastroFlow und Talent-Ausschreibungen speichern Firmendaten mit `org_id`. Firmendaten erscheinen nie im privaten Bereich, private Daten nie im Firmenbereich. Lernen, Ziele, Skills, Junis AI und PersonalAI bleiben immer privat.
+- Rechte: Owner/Admin/Manager ändern Firmendaten, Team Member lesen. GastroFlow: Owner/Admin erhalten Inhaberrechte, Manager Betriebsleitung, Küche/Service per Einladung im Restaurant.
+- Business → „Apps & Sicherheit“: Apps je Unternehmen freigeben/sperren, Zwei-Faktor-Pflicht, Protokoll.
+- Erinnerungen und Hinweise zu Firmendaten gehen an Owner/Admins/Manager; Links öffnen automatisch den richtigen Arbeitsbereich.
+- Löscht eine Person ihr Konto, bleiben die von ihr angelegten Firmendaten beim Unternehmen.
+- Noch offen: Single Sign-on (SSO/SAML), feinere Rechte je App, Firmenwissen für Junis AI (Phase „Verbindung“).

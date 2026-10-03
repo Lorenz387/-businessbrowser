@@ -1,5 +1,6 @@
 // Junis Talent: profiles, interviews, projects and explainable matching.
 import { db, one, all, run, parseJSON } from '../../db.js'
+import { addOrgColumn } from '../../lib/workspace.js'
 import { notify, userSkills, skillCatalog } from '../../lib/engine.js'
 import { canonicalSkill, getPack, skillOf } from './knowledge/index.js'
 
@@ -81,6 +82,7 @@ CREATE TABLE IF NOT EXISTS talent_assessments (
 );
 CREATE INDEX IF NOT EXISTS idx_talent_assessments_user ON talent_assessments(user_id, pack, kind, item);
 `)
+addOrgColumn('talent_projects')
 
 export const TYPES = { expert_ai_training: 'KI-Training (Experten)', freelance: 'Freelance-Projekt', employment: 'Festanstellung' }
 export const SENIORITY = { junior: 'Junior', mid: 'Erfahren', senior: 'Senior', expert: 'Experte' }

@@ -6,6 +6,7 @@ import { useJunis } from './AskJunis.jsx'
 import Logo, { LogoMark } from './Logo.jsx'
 import { cx, Spinner } from './ui.jsx'
 import { relative } from '../lib/format.js'
+import { useWorkspace } from '../lib/workspace.jsx'
 
 const MAIN_NAV = [
   ['/', 'Home'],
@@ -101,11 +102,12 @@ function Notifications() {
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen((o) => !o)}
-        className="relative h-9 px-3 rounded-lg text-sm text-ink-2 hover:bg-subtle"
+        className="relative h-9 px-2 sm:px-3 rounded-lg text-sm text-ink-2 hover:bg-subtle inline-flex items-center"
         aria-label={`Benachrichtigungen${data.unread ? `, ${data.unread} ungelesen` : ''}`}
         aria-expanded={open}
       >
-        Mitteilungen
+        <span className="hidden sm:inline">Mitteilungen</span>
+        <svg className="sm:hidden size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" /></svg>
         {data.unread > 0 && <span className="ml-1.5 inline-flex items-center justify-center min-w-5 h-5 px-1 rounded-full bg-accent text-white text-[11px] font-semibold tabular-nums">{data.unread}</span>}
       </button>
       {open && (
@@ -233,8 +235,51 @@ function CommandBar({ open, onClose }) {
   )
 }
 
+/** Switch between the private area and company workspaces. */
+function WorkspaceSwitcher() {
+  const { current, workspaces, switchTo } = useWorkspace()
+  if (!workspaces.length) return null
+  const value = current.type === 'org' ? `org:${current.orgId}` : 'private'
+  return (
+    <label className="flex items-center">
+      <span className="sr-only">Arbeitsbereich</span>
+      <select value={value} onChange={(e) => switchTo(e.target.value)}
+        className={cx('h-9 w-[7.5rem] sm:w-auto sm:max-w-[13rem] truncate rounded-lg border px-2 text-sm', current.type === 'org' ? 'border-accent/40 bg-accent-soft text-accent font-medium' : 'border-line bg-surface text-ink-2')}>
+        <option value="private">Privat</option>
+        {workspaces.map((w) => <option key={w.id} value={`org:${w.id}`}>{w.name}</option>)}
+      </select>
+    </label>
+  )
+}
+
+function WorkspaceBanner() {
+  const { current, error, workspaces, switchTo } = useWorkspace()
+  if (error?.code === 'two_factor_required') {
+    return (
+      <div className="bg-warn-soft border-b border-warn/20 text-sm">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-10 py-2 flex flex-wrap gap-x-3 gap-y-1 items-center">
+          <span>{error.message}</span>
+          <Link to="/account" className="text-accent hover:underline">Jetzt einrichten</Link>
+          <button className="text-muted hover:text-ink" onClick={() => switchTo('private')}>Zum privaten Bereich</button>
+        </div>
+      </div>
+    )
+  }
+  if (current.type !== 'org') return null
+  const w = workspaces.find((x) => x.id === current.orgId)
+  return (
+    <div className="bg-accent-soft/60 border-b border-accent/15 text-sm">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-10 py-1.5 flex flex-wrap gap-x-3 items-center text-accent">
+        <span>Firmenbereich <b>{current.orgName}</b>{w ? ` · ${w.roleLabel}` : ''}</span>
+        <span className="text-muted">Apps zeigen Firmendaten. Lernen, Ziele und Junis bleiben privat.</span>
+      </div>
+    </div>
+  )
+}
+
 export default function Layout() {
   const { user } = useAuth()
+  const { version: workspaceVersion } = useWorkspace()
   const [menu, setMenu] = useState(false)
   const [cmd, setCmd] = useState(false)
   const location = useLocation()
@@ -294,12 +339,13 @@ export default function Layout() {
             <Link to="/" className="lg:hidden"><LogoMark className="size-6" /></Link>
             <button
               onClick={() => setCmd(true)}
-              className="flex-1 max-w-md h-9 flex items-center justify-between gap-3 rounded-lg border border-line bg-surface px-3 text-sm text-faint hover:border-line-strong"
+              className="flex-1 min-w-0 max-w-md h-9 flex items-center justify-between gap-3 rounded-lg border border-line bg-surface px-3 text-sm text-faint hover:border-line-strong"
             >
               <span className="truncate">Suchen oder Befehl …</span>
               <kbd className="hidden sm:inline text-[11px] border border-line rounded px-1.5 py-0.5">Ctrl K</kbd>
             </button>
             <div className="ml-auto flex items-center gap-1">
+              <WorkspaceSwitcher />
               <button onClick={() => openJunis()} className="hidden sm:flex items-center gap-1.5 h-9 px-3 rounded-lg text-sm text-ink-2 hover:bg-subtle">
                 <LogoMark className="size-4" /> Junis
               </button>
@@ -311,8 +357,9 @@ export default function Layout() {
             </div>
           </div>
         </header>
+        <WorkspaceBanner />
         <main id="main" className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-10 py-8 pb-28 lg:pb-16">
-          <Outlet />
+          <div key={workspaceVersion}><Outlet /></div>
         </main>
         <footer className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-10 pb-24 lg:pb-8 text-xs text-faint flex flex-wrap gap-x-4 gap-y-1">
           <Link to="/legal/impressum" className="hover:text-ink">Impressum</Link>

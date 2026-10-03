@@ -3,51 +3,61 @@ import { one, all, run, parseJSON } from '../../db.js'
 import { h, str, int, oneOf, badRequest, notFound } from '../../lib/http.js'
 import { runScan, isRunning } from './service.js'
 import { RULES, IMPACT_LABEL } from './rules.js'
+import { appScope } from '../../lib/workspace.js'
+import { audit } from '../../lib/audit.js'
 
 const r = Router()
 const uid = (req) => req.user.id
 
-function ownSite(req, id = req.params.id) {
-  const s = one('SELECT * FROM a11y_sites WHERE id = ? AND user_id = ?', Number(id), uid(req))
+function ownSite(req, { write = false } = {}) {
+  const sc = appScope(req, 'accessibility')
+  if (write) sc.requireWrite()
+  const [w, p] = sc.where()
+  const s = one(`SELECT * FROM a11y_sites WHERE id = ? AND ${w}`, Number(req.params.id), ...p)
   if (!s) throw notFound('Diese Website existiert nicht.')
   return s
 }
 const scanOut = (s) => ({ ...s, pages: parseJSON(s.pages, []), counts: parseJSON(s.counts, {}) })
 
 r.get('/apps/a11y/sites', h(async (req, res) => {
-  const sites = all('SELECT * FROM a11y_sites WHERE user_id = ? ORDER BY created_at DESC', uid(req)).map((s) => {
+  const scope = appScope(req, 'accessibility')
+  const [w, p] = scope.where()
+  const sites = all(`SELECT * FROM a11y_sites WHERE ${w} ORDER BY created_at DESC`, ...p).map((s) => {
     const last = one("SELECT * FROM a11y_scans WHERE site_id = ? ORDER BY id DESC LIMIT 1", s.id)
     return { ...s, running: isRunning(s.id), lastScan: last ? scanOut(last) : null }
   })
-  res.json({ sites, rules: RULES, impactLabels: IMPACT_LABEL })
+  res.json({ sites, rules: RULES, impactLabels: IMPACT_LABEL, canWrite: scope.canWrite, workspace: { type: scope.type, name: scope.orgName || null } })
 }))
 
 r.post('/apps/a11y/sites', h(async (req, res) => {
+  const scope = appScope(req, 'accessibility')
+  scope.requireWrite()
   let url = str(req.body.url, { required: true, max: 500, field: 'Adresse' })
   if (!/^https?:\/\//i.test(url)) url = `https://${url}`
   try { url = new URL(url).toString() } catch { throw badRequest('Bitte gib eine gültige Web-Adresse ein.') }
   const name = str(req.body.name, { max: 100 }) || new URL(url).hostname
-  const id = Number(run('INSERT INTO a11y_sites (user_id, name, url, max_pages, schedule) VALUES (?, ?, ?, ?, ?)', uid(req), name, url,
+  const id = Number(run('INSERT INTO a11y_sites (user_id, org_id, name, url, max_pages, schedule) VALUES (?, ?, ?, ?, ?, ?)', uid(req), scope.orgId, name, url,
     int(req.body.maxPages, { min: 1, max: 25, fallback: 10 }), oneOf(req.body.schedule, ['off', 'daily', 'weekly'], { fallback: 'weekly' })).lastInsertRowid)
   runScan(id) // first scan starts immediately in the background
   res.status(201).json({ id })
 }))
 
 r.patch('/apps/a11y/sites/:id', h(async (req, res) => {
-  const s = ownSite(req)
+  const s = ownSite(req, { write: true })
   run('UPDATE a11y_sites SET name = ?, max_pages = ?, schedule = ? WHERE id = ?', str(req.body.name, { max: 100 }) ?? s.name,
     int(req.body.maxPages, { min: 1, max: 25, fallback: s.max_pages }), oneOf(req.body.schedule, ['off', 'daily', 'weekly'], { fallback: s.schedule }), s.id)
   res.json({ ok: true })
 }))
 
 r.delete('/apps/a11y/sites/:id', h(async (req, res) => {
-  const s = ownSite(req)
+  const s = ownSite(req, { write: true })
   run('DELETE FROM a11y_sites WHERE id = ?', s.id)
+  if (s.org_id) audit(req, 'org.deleted_record', { orgId: s.org_id, target: `Website: ${s.name}` })
   res.json({ ok: true })
 }))
 
 r.post('/apps/a11y/sites/:id/scan', h(async (req, res) => {
-  const s = ownSite(req)
+  const s = ownSite(req, { write: true })
   if (isRunning(s.id)) throw badRequest('Für diese Website läuft bereits ein Scan.')
   const wait = req.body.wait === true
   const p = runScan(s.id)
@@ -57,11 +67,12 @@ r.post('/apps/a11y/sites/:id/scan', h(async (req, res) => {
 
 r.get('/apps/a11y/sites/:id', h(async (req, res) => {
   const s = ownSite(req)
-  res.json({ ...s, running: isRunning(s.id), scans: all('SELECT * FROM a11y_scans WHERE site_id = ? ORDER BY id DESC LIMIT 30', s.id).map(scanOut) })
+  res.json({ ...s, canWrite: appScope(req, 'accessibility').canWrite, running: isRunning(s.id), scans: all('SELECT * FROM a11y_scans WHERE site_id = ? ORDER BY id DESC LIMIT 30', s.id).map(scanOut) })
 }))
 
 function ownScan(req) {
-  const sc = one('SELECT sc.*, s.user_id, s.name AS site_name, s.url AS site_url, s.id AS sid FROM a11y_scans sc JOIN a11y_sites s ON s.id = sc.site_id WHERE sc.id = ? AND s.user_id = ?', Number(req.params.scanId), uid(req))
+  const [w, p] = appScope(req, 'accessibility').where('s.')
+  const sc = one(`SELECT sc.*, s.user_id, s.name AS site_name, s.url AS site_url, s.id AS sid FROM a11y_scans sc JOIN a11y_sites s ON s.id = sc.site_id WHERE sc.id = ? AND ${w}`, Number(req.params.scanId), ...p)
   if (!sc) throw notFound('Dieser Scan existiert nicht.')
   return sc
 }

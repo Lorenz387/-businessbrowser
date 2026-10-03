@@ -9,6 +9,8 @@ import { aiAvailable, extractContract } from '../../lib/ai.js'
 import { consumeDaily } from '../../lib/usage.js'
 import { CATEGORIES, contractOut, icsFor } from './service.js'
 import { seal, unseal } from '../../lib/secrets.js'
+import { appScope } from '../../lib/workspace.js'
+import { audit } from '../../lib/audit.js'
 
 const r = Router()
 const uid = (req) => req.user.id
@@ -49,7 +51,9 @@ function readFields(b, cur = {}) {
 }
 
 r.get('/apps/contracts', h(async (req, res) => {
-  const contracts = all('SELECT * FROM contracts WHERE user_id = ? ORDER BY created_at DESC', uid(req)).map(contractOut)
+  const sc = appScope(req, 'contracts')
+  const [w, p] = sc.where()
+  const contracts = all(`SELECT * FROM contracts WHERE ${w} ORDER BY created_at DESC`, ...p).map(contractOut)
   const active = contracts.filter((c) => c.status === 'active')
   res.json({
     contracts: contracts.sort((a, b) => (a.status === 'active' ? 0 : 1) - (b.status === 'active' ? 0 : 1) || (a.daysLeft ?? 1e9) - (b.daysLeft ?? 1e9)),
@@ -63,31 +67,40 @@ r.get('/apps/contracts', h(async (req, res) => {
     categories: CATEGORIES,
     aiAvailable: aiAvailable(),
     slackConfigured: !!one('SELECT slack_webhook FROM contract_settings WHERE user_id = ? AND slack_webhook IS NOT NULL', uid(req)),
+    canWrite: sc.canWrite,
+    workspace: { type: sc.type, name: sc.orgName || null },
   })
 }))
 
 r.post('/apps/contracts', h(async (req, res) => {
+  const sc = appScope(req, 'contracts')
+  sc.requireWrite()
   const f = readFields(req.body)
   if (!f.title) throw badRequest('Bitte gib einen Titel an.')
   const cols = Object.keys(f)
-  const id = Number(run(`INSERT INTO contracts (user_id, ${cols.join(', ')}) VALUES (?, ${cols.map(() => '?').join(', ')})`, uid(req), ...cols.map((k) => f[k])).lastInsertRowid)
+  const id = Number(run(`INSERT INTO contracts (user_id, org_id, ${cols.join(', ')}) VALUES (?, ?, ${cols.map(() => '?').join(', ')})`, uid(req), sc.orgId, ...cols.map((k) => f[k])).lastInsertRowid)
   res.status(201).json({ id })
 }))
 
 /** Upload a contract document; with Junis AI the terms are extracted as a suggestion. */
 r.post('/apps/contracts/upload', upload.single('file'), h(async (req, res) => {
   const userId = uid(req)
+  const sc = appScope(req, 'contracts')
+  sc.requireWrite()
   if (!req.file) throw badRequest('Bitte wähle eine Datei.')
   const text = req.file.mimetype === 'text/plain' ? fs.readFileSync(req.file.path, 'utf8').slice(0, 300000) : null
-  const docId = Number(run('INSERT INTO documents (user_id, filename, mime, size, stored_name, text_content) VALUES (?, ?, ?, ?, ?, ?)',
-    userId, req.file.originalname.slice(0, 200), req.file.mimetype, req.file.size, req.file.filename, text).lastInsertRowid)
+  const docId = Number(run('INSERT INTO documents (user_id, org_id, filename, mime, size, stored_name, text_content) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    userId, sc.orgId, req.file.originalname.slice(0, 200), req.file.mimetype, req.file.size, req.file.filename, text).lastInsertRowid)
   const title = req.file.originalname.replace(/\.[^.]+$/, '').slice(0, 200)
-  const id = Number(run('INSERT INTO contracts (user_id, title, document_id) VALUES (?, ?, ?)', userId, title, docId).lastInsertRowid)
+  const id = Number(run('INSERT INTO contracts (user_id, org_id, title, document_id) VALUES (?, ?, ?, ?)', userId, sc.orgId, title, docId).lastInsertRowid)
   res.status(201).json({ id })
 }))
 
-function ownContract(req) {
-  const c = one('SELECT * FROM contracts WHERE id = ? AND user_id = ?', Number(req.params.id), uid(req))
+function ownContract(req, { write = false } = {}) {
+  const sc = appScope(req, 'contracts')
+  if (write) sc.requireWrite()
+  const [w, p] = sc.where()
+  const c = one(`SELECT * FROM contracts WHERE id = ? AND ${w}`, Number(req.params.id), ...p)
   if (!c) throw notFound('Dieser Vertrag existiert nicht.')
   return c
 }
@@ -95,11 +108,11 @@ function ownContract(req) {
 r.get('/apps/contracts/:id', h(async (req, res) => {
   const c = ownContract(req)
   const doc = c.document_id ? one('SELECT id, filename, mime, size FROM documents WHERE id = ?', c.document_id) : null
-  res.json({ ...contractOut(c), document: doc, categories: CATEGORIES, aiAvailable: aiAvailable() })
+  res.json({ ...contractOut(c), document: doc, categories: CATEGORIES, aiAvailable: aiAvailable(), canWrite: appScope(req, 'contracts').canWrite })
 }))
 
 r.post('/apps/contracts/:id/extract', h(async (req, res) => {
-  const c = ownContract(req)
+  const c = ownContract(req, { write: true })
   const doc = c.document_id ? one('SELECT * FROM documents WHERE id = ?', c.document_id) : null
   if (!doc) throw badRequest('Zu diesem Vertrag ist kein Dokument hinterlegt.')
   consumeDaily(uid(req), 'ai_messages')
@@ -110,7 +123,7 @@ r.post('/apps/contracts/:id/extract', h(async (req, res) => {
 }))
 
 r.patch('/apps/contracts/:id', h(async (req, res) => {
-  const c = ownContract(req)
+  const c = ownContract(req, { write: true })
   const f = readFields(req.body, c)
   const cols = Object.keys(f)
   run(`UPDATE contracts SET ${cols.map((k) => `${k} = ?`).join(', ')}, updated_at = datetime('now') WHERE id = ?`, ...cols.map((k) => f[k]), c.id)
@@ -118,8 +131,9 @@ r.patch('/apps/contracts/:id', h(async (req, res) => {
 }))
 
 r.delete('/apps/contracts/:id', h(async (req, res) => {
-  const c = ownContract(req)
+  const c = ownContract(req, { write: true })
   run('DELETE FROM contracts WHERE id = ?', c.id)
+  if (c.org_id) audit(req, 'org.deleted_record', { orgId: c.org_id, target: `Vertrag: ${c.title}` })
   res.json({ ok: true })
 }))
 
@@ -141,7 +155,8 @@ r.post('/apps/contracts-settings/test', h(async (req, res) => {
 r.get('/apps/contracts-calendar.ics', h(async (req, res) => {
   res.setHeader('Content-Type', 'text/calendar; charset=utf-8')
   res.setHeader('Content-Disposition', 'attachment; filename="kuendigungsfristen.ics"')
-  res.send(icsFor(uid(req)))
+  const [w, p] = appScope(req, 'contracts').where()
+  res.send(icsFor(w, p))
 }))
 
 export default r

@@ -27,7 +27,7 @@ function searchKnowledge(userId, text, limit = 4) {
       const key = `k${k.id}`
       scored.set(key, { title: k.title, content: k.content, score: (scored.get(key)?.score || 0) + 1 })
     }
-    for (const d of all("SELECT id, filename, COALESCE(summary, text_content, '') AS content FROM documents WHERE user_id = ? AND (lower(filename) LIKE ? OR lower(summary) LIKE ? OR lower(text_content) LIKE ?) LIMIT 20", userId, like, like, like)) {
+    for (const d of all("SELECT id, filename, COALESCE(summary, text_content, '') AS content FROM documents WHERE user_id = ? AND org_id IS NULL AND (lower(filename) LIKE ? OR lower(summary) LIKE ? OR lower(text_content) LIKE ?) LIMIT 20", userId, like, like, like)) {
       const key = `d${d.id}`
       scored.set(key, { title: `Dokument: ${d.filename}`, content: d.content, score: (scored.get(key)?.score || 0) + 1 })
     }
@@ -150,7 +150,7 @@ r.get('/knowledge', h(async (req, res) => {
   if (q) items = items.filter((i) => `${i.title} ${i.content} ${i.tags}`.toLowerCase().includes(q.toLowerCase()))
   res.json({
     items,
-    documents: all('SELECT id, filename, mime, size, project_id, created_at, summary IS NOT NULL AS analyzed FROM documents WHERE user_id = ? ORDER BY created_at DESC', userId),
+    documents: all('SELECT id, filename, mime, size, project_id, created_at, summary IS NOT NULL AS analyzed FROM documents WHERE user_id = ? AND org_id IS NULL ORDER BY created_at DESC', userId),
     documentsEnabled: entitlements(userId).flags.documents,
   })
 }))

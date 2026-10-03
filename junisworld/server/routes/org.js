@@ -7,6 +7,8 @@ import * as E from '../lib/engine.js'
 import { getCatalogSkill, CATEGORIES } from '../lib/catalog.js'
 import { createGoal } from '../lib/goals.js'
 import { structureCreatorItem } from '../lib/ai.js'
+import { audit, orgAudit } from '../lib/audit.js'
+import { APPS, orgAppList, resolveWorkspace } from '../lib/workspace.js'
 
 const r = Router()
 const uid = (req) => req.user.id
@@ -48,6 +50,7 @@ r.post('/orgs', h(async (req, res) => {
     run("INSERT INTO org_members (org_id, user_id, role) VALUES (?, ?, 'owner')", orgId, uid(req))
     return orgId
   })
+  audit(req, 'org.created', { orgId: id, target: name })
   res.status(201).json({ id })
 }))
 
@@ -141,6 +144,7 @@ r.post('/orgs/:id/invites', h(async (req, res) => {
   if (user && one('SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ?', m.org_id, user.id)) throw badRequest('Diese Person ist bereits Mitglied.')
   run('INSERT INTO org_invites (org_id, email, role, invited_by) VALUES (?, ?, ?, ?) ON CONFLICT(org_id, email) DO UPDATE SET role = excluded.role, accepted_at = NULL', m.org_id, email, role, uid(req))
   if (user) E.notify(user.id, 'org', `Du wurdest zu „${m.name}“ eingeladen.`, { link: '/business', dedupeKey: `invite:${m.org_id}:${user.id}` })
+  audit(req, 'org.invite', { orgId: m.org_id, target: email, meta: { role } })
   res.status(201).json({ ok: true, registered: !!user })
 }))
 
@@ -177,6 +181,7 @@ r.patch('/orgs/:id/members/:userId', h(async (req, res) => {
   const teamId = req.body.teamId !== undefined ? int(req.body.teamId) : target.team_id
   if (teamId && !one('SELECT 1 FROM teams WHERE id = ? AND org_id = ?', teamId, m.org_id)) throw badRequest('Unbekanntes Team.')
   run('UPDATE org_members SET role = ?, team_id = ? WHERE org_id = ? AND user_id = ?', role, teamId, m.org_id, target.user_id)
+  if (role !== target.role) audit(req, 'org.member_role', { orgId: m.org_id, target: one('SELECT name FROM users WHERE id = ?', target.user_id)?.name, meta: { from: target.role, to: role } })
   res.json({ ok: true })
 }))
 
@@ -188,6 +193,53 @@ r.delete('/orgs/:id/members/:userId', h(async (req, res) => {
   if (target.role === 'owner') throw forbidden('Der Owner kann die Organisation nicht verlassen.')
   if (targetId !== uid(req)) requireRole(m, 'owner', 'admin')
   run('DELETE FROM org_members WHERE org_id = ? AND user_id = ?', m.org_id, targetId)
+  audit(req, 'org.member_removed', { orgId: m.org_id, target: one('SELECT name FROM users WHERE id = ?', targetId)?.name, meta: { self: targetId === uid(req) } })
+  res.json({ ok: true })
+}))
+
+// ---------------- Arbeitsbereiche, App-Freigaben, Sicherheitsrichtlinien ----------------
+
+/** Workspaces the user can switch between, and the apps available in the current one. */
+r.get('/workspace', h(async (req, res) => {
+  const orgs = all(`SELECT o.id, o.name, o.kind, o.require_2fa, m.role FROM org_members m JOIN organizations o ON o.id = m.org_id
+    WHERE m.user_id = ? AND o.kind != 'family' ORDER BY o.name`, uid(req))
+  let current = { type: 'private' }
+  let error = null
+  try { current = resolveWorkspace(req) } catch (e) { error = { code: e.code, message: e.message } }
+  const apps = current.type === 'org' ? orgAppList(current.orgId) : Object.entries(APPS).map(([id, a]) => ({ id, name: a.name, orgCapable: a.org, enabled: true }))
+  res.json({ current, error, apps, twoFactor: !!req.user.totp_enabled, workspaces: orgs.map((o) => ({ id: o.id, name: o.name, role: o.role, roleLabel: ROLE_LABELS[o.role], require2fa: !!o.require_2fa })) })
+}))
+
+r.get('/orgs/:id/security', h(async (req, res) => {
+  const m = membership(req)
+  requireRole(m, 'owner', 'admin')
+  const org = one('SELECT require_2fa FROM organizations WHERE id = ?', m.org_id)
+  res.json({
+    require2fa: !!org.require_2fa,
+    apps: orgAppList(m.org_id),
+    membersWithout2fa: all('SELECT u.name FROM org_members om JOIN users u ON u.id = om.user_id WHERE om.org_id = ? AND u.totp_enabled = 0 ORDER BY u.name', m.org_id).map((x) => x.name),
+    audit: orgAudit(m.org_id),
+  })
+}))
+
+r.put('/orgs/:id/apps/:appId', h(async (req, res) => {
+  const m = membership(req)
+  requireRole(m, 'owner', 'admin')
+  const app = APPS[req.params.appId]
+  if (!app?.org) throw badRequest('Diese App kann nicht für Unternehmen freigegeben werden.')
+  const enabled = req.body.enabled ? 1 : 0
+  run("INSERT INTO org_apps (org_id, app_id, enabled) VALUES (?, ?, ?) ON CONFLICT(org_id, app_id) DO UPDATE SET enabled = excluded.enabled, updated_at = datetime('now')", m.org_id, req.params.appId, enabled)
+  audit(req, 'org.app_toggled', { orgId: m.org_id, target: app.name, meta: { enabled: !!enabled } })
+  res.json({ ok: true })
+}))
+
+r.put('/orgs/:id/policy', h(async (req, res) => {
+  const m = membership(req)
+  requireRole(m, 'owner', 'admin')
+  const require2fa = req.body.require2fa ? 1 : 0
+  if (require2fa && !req.user.totp_enabled) throw badRequest('Richte die Zwei-Faktor-Anmeldung zuerst für dein eigenes Konto ein (Account → Sicherheit), sonst sperrst du dich selbst aus.')
+  run('UPDATE organizations SET require_2fa = ? WHERE id = ?', require2fa, m.org_id)
+  audit(req, 'org.policy_changed', { orgId: m.org_id, target: 'Zwei-Faktor-Pflicht', meta: { require2fa: !!require2fa } })
   res.json({ ok: true })
 }))
 

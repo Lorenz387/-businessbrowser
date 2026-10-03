@@ -1,5 +1,6 @@
 // GastroFlow — Restaurant-Betriebssystem in JunisWorld: Datenmodell, Rollen und Berechnungen.
 import { db, one, all } from '../../db.js'
+import { addOrgColumn, assertOrgApp } from '../../lib/workspace.js'
 import { badRequest, forbidden, notFound } from '../../lib/http.js'
 
 db.exec(`
@@ -165,6 +166,7 @@ CREATE TABLE IF NOT EXISTS gastro_plans (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 `)
+addOrgColumn('gastro_restaurants')
 
 export const ROLES = { owner: 'Inhaber/in', manager: 'Betriebsleitung', kitchen: 'Küche', service: 'Service' }
 
@@ -179,12 +181,23 @@ const WRITE = {
 }
 const READ = { ...WRITE, shifts: ['owner', 'manager', 'kitchen', 'service'] }
 
-export function membership(userId, restaurantId) {
+const ORG_TO_GASTRO = { owner: 'owner', admin: 'owner', manager: 'manager' }
+const RANK = ['service', 'kitchen', 'manager', 'owner']
+
+/** Access to a restaurant: explicit GastroFlow role, or — for company restaurants — the role in the company. */
+export function membership(user, restaurantId) {
   const r = one('SELECT * FROM gastro_restaurants WHERE id = ?', restaurantId)
   if (!r) throw notFound('Dieses Restaurant existiert nicht.')
-  const m = one('SELECT role FROM gastro_members WHERE restaurant_id = ? AND user_id = ?', restaurantId, userId)
-  if (!m) throw notFound('Dieses Restaurant existiert nicht.')
-  return { restaurant: r, role: m.role }
+  const explicit = one('SELECT role FROM gastro_members WHERE restaurant_id = ? AND user_id = ?', restaurantId, user.id)?.role
+  let viaOrg = null
+  if (r.org_id) {
+    const orgRoleName = one('SELECT role FROM org_members WHERE org_id = ? AND user_id = ?', r.org_id, user.id)?.role
+    if (orgRoleName) viaOrg = ORG_TO_GASTRO[orgRoleName] || null
+    if (explicit || viaOrg) assertOrgApp(user, r.org_id, 'gastro')
+  }
+  const role = [explicit, viaOrg].filter(Boolean).sort((a, b) => RANK.indexOf(b) - RANK.indexOf(a))[0]
+  if (!role) throw notFound('Dieses Restaurant existiert nicht.')
+  return { restaurant: r, role }
 }
 export function need(ctx, area, mode = 'write') {
   if (!(mode === 'read' ? READ : WRITE)[area].includes(ctx.role)) throw forbidden(`Deine Rolle (${ROLES[ctx.role]}) hat hier keinen Zugriff.`)

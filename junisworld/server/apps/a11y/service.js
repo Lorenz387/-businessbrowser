@@ -1,4 +1,5 @@
 import { db, one, all, run, parseJSON } from '../../db.js'
+import { addOrgColumn, recipientsFor } from '../../lib/workspace.js'
 import { safeFetch } from '../safeFetch.js'
 import { checkHtml, extractLinks, IMPACT_WEIGHT } from './rules.js'
 import { notify } from '../../lib/engine.js'
@@ -41,6 +42,7 @@ CREATE TABLE IF NOT EXISTS a11y_issues (
 );
 CREATE INDEX IF NOT EXISTS a11y_issues_scan ON a11y_issues(scan_id);
 `)
+addOrgColumn('a11y_sites')
 
 const running = new Set()
 
@@ -91,7 +93,7 @@ export async function runScan(siteId) {
     db.exec('COMMIT')
     const prevCritical = prevScan ? parseJSON(prevScan.counts, {}).critical || 0 : null
     if (prevCritical !== null && (counts.critical || 0) > prevCritical) {
-      notify(site.user_id, 'a11y', `Barrierefreiheit: ${counts.critical - prevCritical} neue kritische Barriere(n) auf ${site.name}.`, { link: `/apps/accessibility/scans/${scanId}`, dedupeKey: `a11y:${scanId}` })
+      for (const userId of recipientsFor(site)) notify(userId, 'a11y', `${site.org_id ? '[Firma] ' : ''}Barrierefreiheit: ${counts.critical - prevCritical} neue kritische Barriere(n) auf ${site.name}.`, { link: `/apps/accessibility/scans/${scanId}${site.org_id ? `?ws=org:${site.org_id}` : ''}`, dedupeKey: `a11y:${scanId}:${userId}` })
     }
     return scanId
   } catch (e) {

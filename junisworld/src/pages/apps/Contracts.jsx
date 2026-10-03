@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { api, post, patch, del } from '../../lib/api.js'
+import { api, post, patch, del, getWorkspace } from '../../lib/api.js'
 import { useApi, useAction, useDocumentTitle } from '../../lib/hooks.js'
 import { euro } from '../../lib/format.js'
 import {
@@ -46,8 +46,8 @@ export function ContractsHome() {
         subtitle="Verträge hochladen, Fristen automatisch auslesen lassen, rechtzeitig vor der Verlängerung gewarnt werden."
         actions={<>
           <input ref={fileRef} type="file" className="hidden" accept=".pdf,.png,.jpg,.jpeg,.webp,.txt" onChange={onFile} />
-          <Button variant="primary" onClick={() => fileRef.current?.click()} loading={upload.pending}>Vertrag hochladen</Button>
-          <Button onClick={() => setCreating(true)}>Manuell anlegen</Button>
+          {data.canWrite && <Button variant="primary" onClick={() => fileRef.current?.click()} loading={upload.pending}>Vertrag hochladen</Button>}
+          {data.canWrite && <Button onClick={() => setCreating(true)}>Manuell anlegen</Button>}
           <Button variant="ghost" onClick={() => setSettings(true)}>Benachrichtigungen</Button>
         </>} />
       <InlineError error={upload.error} />
@@ -73,7 +73,7 @@ export function ContractsHome() {
             </Link>
           ))}
         </Card>
-      ) : <EmptyState title="Noch keine Verträge." text="Lade einen Vertrag als PDF hoch — Junis liest Laufzeit, Kündigungsfrist und Kosten aus. Du prüfst und bestätigst." action={<Button variant="primary" onClick={() => fileRef.current?.click()}>Vertrag hochladen</Button>} secondary={<Button onClick={() => setCreating(true)}>Manuell anlegen</Button>} />}
+      ) : <EmptyState title="Noch keine Verträge." text="Lade einen Vertrag als PDF hoch — Junis liest Laufzeit, Kündigungsfrist und Kosten aus. Du prüfst und bestätigst." action={data.canWrite && <Button variant="primary" onClick={() => fileRef.current?.click()}>Vertrag hochladen</Button>} secondary={data.canWrite && <Button onClick={() => setCreating(true)}>Manuell anlegen</Button>} />}
       <p className="text-xs text-muted mt-4">Keine Rechtsberatung. Fristberechnungen beruhen auf den erfassten Angaben; Sonderregeln (z. B. Kündigung nur zum Quartalsende, gesetzliche Fristen) bitte im Vertrag prüfen.</p>
       {creating && <ContractForm categories={data.categories} onClose={() => setCreating(false)} onSaved={(id) => navigate(`/apps/contracts/${id}`)} />}
       {settings && <NotificationSettings configured={data.slackConfigured} onClose={() => { setSettings(false); reload() }} />}
@@ -93,7 +93,7 @@ function NotificationSettings({ configured, onClose }) {
         {(id) => <Input id={id} value={hook} onChange={(e) => setHook(e.target.value)} placeholder="https://hooks.slack.com/services/…" />}
       </Field>
       {configured && <Button size="sm" onClick={() => action.run(() => post('/apps/contracts-settings/test')).then(() => toast('Testnachricht gesendet.')).catch(() => {})}>Testnachricht senden</Button>}
-      <p className="text-xs text-muted mt-4">E-Mail-Versand ist in dieser Installation nicht eingerichtet. Fristen lassen sich zusätzlich als Kalenderdatei exportieren: <a href="/api/apps/contracts-calendar.ics" className="text-accent hover:underline">Kalender (.ics) herunterladen</a>.</p>
+      <p className="text-xs text-muted mt-4">E-Mail-Versand ist in dieser Installation nicht eingerichtet. Fristen lassen sich zusätzlich als Kalenderdatei exportieren: <a href={`/api/apps/contracts-calendar.ics?ws=${getWorkspace()}`} className="text-accent hover:underline">Kalender (.ics) herunterladen</a>.</p>
       <InlineError error={action.error} />
     </Modal>
   )
@@ -185,7 +185,7 @@ export function ContractView() {
     <div className="max-w-4xl">
       {dialog}
       <PageHeader back={{ to: '/apps/contracts', label: 'Fristen-Manager' }} title={c.title} subtitle={`${c.counterparty || 'Vertragspartner unbekannt'} · ${c.categoryLabel} · ${STATUS[c.status]}`}
-        actions={<>
+        actions={c.canWrite && <>
           <Button onClick={() => setEditing(true)}>Bearbeiten</Button>
           {c.status === 'active' && <Button onClick={() => patch(`/apps/contracts/${id}`, { status: 'cancelled' }).then(() => { toast('Als gekündigt markiert.'); reload() })}>Als gekündigt markieren</Button>}
           <Button variant="ghost" onClick={remove}>Löschen</Button>

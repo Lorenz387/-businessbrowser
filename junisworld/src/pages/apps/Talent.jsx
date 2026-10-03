@@ -408,10 +408,11 @@ function CompanySide() {
   const [creating, setCreating] = useState(false)
   if (loading) return <Loading />
   if (error) return <ErrorState error={error} what="Deine Ausschreibungen" onRetry={hardReload} />
+  if (!data.canWrite) return <EmptyState title="Ausschreibungen verwalten Owner, Admins und Manager." text={`Im Firmenbereich von ${data.workspace?.name || 'deinem Unternehmen'} sehen nur sie Kandidatinnen und Kandidaten — zum Schutz der Bewerberdaten.`} />
   return (
     <>
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <p className="text-sm text-muted">{data.poolSize} Talent(e) im Pool. Beschreibe, wen du suchst — Junis strukturiert die Anforderungen und gleicht den Pool ab.</p>
+        <p className="text-sm text-muted">{data.workspace?.type === 'org' ? `Ausschreibungen von ${data.workspace.name} — sichtbar für Owner, Admins und Manager. ` : ''}{data.poolSize} Talent(e) im Pool. Beschreibe, wen du suchst — Junis strukturiert die Anforderungen und gleicht den Pool ab.</p>
         <Button variant="primary" onClick={() => setCreating(true)}>Projekt ausschreiben</Button>
       </div>
       {data.projects.length ? (
