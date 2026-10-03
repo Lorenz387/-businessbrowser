@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import { audit } from '../lib/audit.js'
 import fs from 'node:fs'
 import path from 'node:path'
 import { one, all, run, tx, parseJSON, UPLOAD_DIR } from '../db.js'
@@ -330,6 +331,7 @@ const USER_TABLES = ['profiles', 'user_skills', 'skill_history', 'skill_evidence
   'research_reports', 'custom_skills', 'creator_items', 'enrollments', 'credit_ledger', 'agent_profiles', 'agent_conversations', 'a11y_sites', 'contracts', 'talent_interviews', 'talent_assessments']
 
 r.get('/account/export', h(async (req, res) => {
+  audit(req, 'account.export')
   const userId = uid(req)
   const data = { exportedAt: new Date().toISOString(), user: publicUser(req.user) }
   for (const t of USER_TABLES) data[t] = all(`SELECT * FROM ${t} WHERE user_id = ?`, userId)

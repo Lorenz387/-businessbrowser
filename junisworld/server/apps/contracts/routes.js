@@ -8,6 +8,7 @@ import { h, str, int, oneOf, badRequest, notFound } from '../../lib/http.js'
 import { aiAvailable, extractContract } from '../../lib/ai.js'
 import { consumeDaily } from '../../lib/usage.js'
 import { CATEGORIES, contractOut, icsFor } from './service.js'
+import { seal, unseal } from '../../lib/secrets.js'
 
 const r = Router()
 const uid = (req) => req.user.id
@@ -125,14 +126,14 @@ r.delete('/apps/contracts/:id', h(async (req, res) => {
 r.put('/apps/contracts-settings', h(async (req, res) => {
   const hook = str(req.body.slackWebhook, { max: 500 })
   if (hook && !hook.startsWith('https://hooks.slack.com/')) throw badRequest('Bitte eine Slack-Incoming-Webhook-URL (https://hooks.slack.com/…) eingeben.')
-  run('INSERT INTO contract_settings (user_id, slack_webhook) VALUES (?, ?) ON CONFLICT(user_id) DO UPDATE SET slack_webhook = excluded.slack_webhook', uid(req), hook)
+  run('INSERT INTO contract_settings (user_id, slack_webhook) VALUES (?, ?) ON CONFLICT(user_id) DO UPDATE SET slack_webhook = excluded.slack_webhook', uid(req), seal(hook))
   res.json({ ok: true })
 }))
 
 r.post('/apps/contracts-settings/test', h(async (req, res) => {
   const s = one('SELECT slack_webhook FROM contract_settings WHERE user_id = ?', uid(req))
   if (!s?.slack_webhook) throw badRequest('Es ist keine Slack-Webhook-URL gespeichert.')
-  const ok = await fetch(s.slack_webhook, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: 'Testnachricht vom JunisWorld Fristen-Manager.' }), signal: AbortSignal.timeout(10000) }).then((x) => x.ok).catch(() => false)
+  const ok = await fetch(unseal(s.slack_webhook), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: 'Testnachricht vom JunisWorld Fristen-Manager.' }), signal: AbortSignal.timeout(10000) }).then((x) => x.ok).catch(() => false)
   if (!ok) throw badRequest('Slack hat die Nachricht nicht angenommen. Prüfe die Webhook-URL.')
   res.json({ ok: true })
 }))

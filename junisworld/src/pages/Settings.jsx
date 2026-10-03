@@ -5,6 +5,7 @@ import { useApi, useAction, useDocumentTitle } from '../lib/hooks.js'
 import { useAuth, PLAN_NAMES } from '../lib/auth.jsx'
 import { LEARNING_STYLES, formatDate, euro } from '../lib/format.js'
 import { PlanGrid } from './Public.jsx'
+import SecuritySection from '../components/SecuritySection.jsx'
 import {
   Button, Card, Checkbox, ErrorState, Field, Input, InlineError, Loading, Modal, PageHeader, Section, Select, Segmented, Stat, useConfirm, useToast,
 } from '../components/ui.jsx'
@@ -139,6 +140,7 @@ export function Account() {
           <Button onClick={changePw} loading={pwAction.pending} disabled={!pw.current || pw.next.length < 10}>Passwort ändern</Button>
         </Card>
       </Section>
+      <SecuritySection />
       <Section title="Deine Daten">
         <Card className="p-5">
           <p className="text-sm text-muted mb-4">Exportiere alle Daten, die JunisWorld über dich speichert (JSON), oder lösche dein Konto vollständig.</p>

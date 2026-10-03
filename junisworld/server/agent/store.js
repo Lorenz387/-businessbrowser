@@ -1,5 +1,6 @@
 // PersonalAI persistence: profiles, provider settings, conversations, messages, pending approvals.
 import os from 'node:os'
+import { seal, unseal, isSealed } from '../lib/secrets.js'
 import path from 'node:path'
 import { db, one, all, run, parseJSON } from '../db.js'
 
@@ -55,6 +56,11 @@ export const PROVIDERS = {
   custom: { label: 'OpenAI-kompatibel (eigene URL)', baseUrl: null, defaultModel: null, needsKey: false, envKey: null },
 }
 
+// Encrypt API keys stored before encryption existed.
+for (const row of all('SELECT user_id, provider, api_key FROM agent_providers WHERE api_key IS NOT NULL')) {
+  if (!isSealed(row.api_key)) run('UPDATE agent_providers SET api_key = ? WHERE user_id = ? AND provider = ?', seal(row.api_key), row.user_id, row.provider)
+}
+
 export const TOOL_NAMES = ['run_command', 'read_file', 'write_file', 'list_directory', 'web_fetch', 'remember']
 export const PERMISSION_MODES = ['strict', 'ask', 'auto']
 
@@ -67,7 +73,7 @@ export function providerConfig(userId, provider) {
   const row = one('SELECT * FROM agent_providers WHERE user_id = ? AND provider = ?', userId, provider) || {}
   return {
     provider,
-    apiKey: row.api_key || (def.envKey ? process.env[def.envKey] : null) || null,
+    apiKey: unseal(row.api_key) || (def.envKey ? process.env[def.envKey] : null) || null,
     keySource: row.api_key ? 'app' : def.envKey && process.env[def.envKey] ? 'env' : null,
     baseUrl: row.base_url || def.baseUrl,
     defaultModel: row.default_model || def.defaultModel,

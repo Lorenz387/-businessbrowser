@@ -1,5 +1,6 @@
 // Contract lifecycle: deadline calculation, reminders (in-app, Slack webhook) and AI extraction.
 import { db, one, all, run, parseJSON } from '../../db.js'
+import { seal, unseal, isSealed } from '../../lib/secrets.js'
 import { notify } from '../../lib/engine.js'
 
 db.exec(`
@@ -38,6 +39,9 @@ CREATE TABLE IF NOT EXISTS contract_reminders (
   PRIMARY KEY (contract_id, deadline, days_before)
 );
 `)
+for (const x of all('SELECT user_id, slack_webhook FROM contract_settings WHERE slack_webhook IS NOT NULL')) {
+  if (!isSealed(x.slack_webhook)) run('UPDATE contract_settings SET slack_webhook = ? WHERE user_id = ?', seal(x.slack_webhook), x.user_id)
+}
 
 export const CATEGORIES = { miete: 'Miete & Immobilien', software: 'Software & Lizenzen', leasing: 'Leasing', versicherung: 'Versicherung', telekom: 'Telekommunikation', energie: 'Energie', dienstleistung: 'Dienstleistung', sonstiges: 'Sonstiges' }
 
@@ -121,7 +125,7 @@ export async function sendDueReminders(today = todayUtc()) {
     const text = `Kündigungsfrist: „${c.title}“${c.counterparty ? ` (${c.counterparty})` : ''} muss bis ${fmtDate(dl.cancelBy)} gekündigt werden — noch ${dl.daysLeft} Tage.${c.auto_renew ? ` Sonst Verlängerung um ${c.renewal_months} Monate${cost ? ` (ca. ${cost.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })} pro Jahr)` : ''}.` : ''}`
     notify(c.user_id, 'contract', text, { link: `/apps/contracts/${c.id}`, dedupeKey: `contract:${c.id}:${dl.cancelBy}:${offset}` })
     const settings = one('SELECT slack_webhook FROM contract_settings WHERE user_id = ?', c.user_id)
-    if (settings?.slack_webhook) await postSlack(settings.slack_webhook, text)
+    if (settings?.slack_webhook) await postSlack(unseal(settings.slack_webhook), text)
     sent++
   }
   return sent

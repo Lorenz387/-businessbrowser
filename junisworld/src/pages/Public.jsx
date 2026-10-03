@@ -141,14 +141,45 @@ export function Login() {
   const { refresh } = useAuth()
   const navigate = useNavigate()
   const [form, setForm] = useState({ email: '', password: '' })
-  const { pending, error, run } = useAction()
+  const [challenge, setChallenge] = useState(null)
+  const [code, setCode] = useState('')
+  const [useRecovery, setUseRecovery] = useState(false)
+  const { pending, error, run, setError } = useAction()
+  const done = async () => {
+    await refresh()
+    navigate(params.get('next') || '/', { replace: true })
+  }
   const submit = (e) => {
     e.preventDefault()
     run(async () => {
-      await post('/auth/login', form)
-      await refresh()
-      navigate(params.get('next') || '/', { replace: true })
+      const r = await post('/auth/login', form)
+      if (r.twoFactorRequired) { setChallenge(r.challenge); setCode(''); return }
+      await done()
     }).catch(() => {})
+  }
+  const submitCode = (e) => {
+    e.preventDefault()
+    run(async () => {
+      await post('/auth/login/2fa', useRecovery ? { challenge, recoveryCode: code } : { challenge, code })
+      await done()
+    }).catch((err) => { if (err.code === 'challenge_expired' || err.status === 429) setChallenge(null) })
+  }
+  if (challenge) {
+    return (
+      <PublicShell narrow>
+        <h1 className="text-2xl font-semibold tracking-tight">Bestätigungscode</h1>
+        <p className="text-muted mt-1 mb-8">{useRecovery ? 'Gib einen deiner Wiederherstellungscodes ein. Jeder Code funktioniert nur einmal.' : 'Gib den 6-stelligen Code aus deiner Authenticator-App ein.'}</p>
+        <form onSubmit={submitCode}>
+          <Field label={useRecovery ? 'Wiederherstellungscode' : 'Code'}>{(id) => <Input id={id} value={code} onChange={(e) => setCode(e.target.value)} autoFocus autoComplete="one-time-code" inputMode={useRecovery ? 'text' : 'numeric'} placeholder={useRecovery ? 'XXXXX-XXXXX' : '123456'} />}</Field>
+          <InlineError error={error} />
+          <Button type="submit" variant="primary" size="lg" className="w-full mt-4" loading={pending} disabled={!code.trim()}>Bestätigen</Button>
+        </form>
+        <div className="flex justify-between text-sm mt-6">
+          <button className="text-accent hover:underline" onClick={() => { setUseRecovery(!useRecovery); setCode(''); setError(null) }}>{useRecovery ? 'Authenticator-Code verwenden' : 'Kein Zugriff auf die App?'}</button>
+          <button className="text-muted hover:text-ink" onClick={() => { setChallenge(null); setError(null) }}>Zurück</button>
+        </div>
+      </PublicShell>
+    )
   }
   return (
     <PublicShell narrow>

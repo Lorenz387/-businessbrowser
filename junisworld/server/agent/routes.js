@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import { seal } from '../lib/secrets.js'
 import { one, all, run } from '../db.js'
 import { h, str, int, oneOf, badRequest, notFound } from '../lib/http.js'
 import {
@@ -150,7 +151,7 @@ r.delete('/agent/profiles/:id', h(async (req, res) => {
 r.put('/agent/providers/:provider', h(async (req, res) => {
   const provider = oneOf(req.params.provider, Object.keys(PROVIDERS), { field: 'Anbieter' })
   const cur = one('SELECT * FROM agent_providers WHERE user_id = ? AND provider = ?', uid(req), provider) || {}
-  const apiKey = req.body.clearKey ? null : req.body.apiKey ? str(req.body.apiKey, { max: 500 }) : cur.api_key ?? null
+  const apiKey = req.body.clearKey ? null : req.body.apiKey ? seal(str(req.body.apiKey, { max: 500 })) : cur.api_key ?? null
   const baseUrl = req.body.baseUrl !== undefined ? str(req.body.baseUrl, { max: 300 }) : cur.base_url ?? null
   if (baseUrl && !/^https?:\/\//i.test(baseUrl)) throw badRequest('Die API-Adresse muss mit http:// oder https:// beginnen.')
   const model = req.body.defaultModel !== undefined ? str(req.body.defaultModel, { max: 120 }) : cur.default_model ?? null

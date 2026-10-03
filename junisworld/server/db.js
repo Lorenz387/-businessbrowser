@@ -406,3 +406,8 @@ export function parseJSON(v, fallback) {
     return fallback
   }
 }
+
+/** Idempotent schema migration: add a column if it does not exist yet. */
+export function addColumn(table, column, definition) {
+  if (!all(`PRAGMA table_info(${table})`).some((c) => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`)
+}

@@ -1,7 +1,12 @@
 import { Router } from 'express'
-import { one, run, tx } from '../db.js'
+import { one, all, run, tx } from '../db.js'
 import { h, str, int, oneOf, badRequest, ApiError } from '../lib/http.js'
+import crypto from 'node:crypto'
+import QRCode from 'qrcode'
 import { hashPassword, verifyPassword, createSession, destroySession, requireAuth, rateLimit, planFor } from '../lib/auth.js'
+import { seal, unseal, sha256 } from '../lib/secrets.js'
+import { newSecret, verifyCode, otpauthUri } from '../lib/totp.js'
+import { audit, userAudit } from '../lib/audit.js'
 import { createGoal, ensureCustomSkill } from '../lib/goals.js'
 import { ensureUserSkill, logActivity } from '../lib/engine.js'
 import { getCatalogSkill, getCareerPath } from '../lib/catalog.js'
@@ -20,6 +25,7 @@ export function publicUser(u) {
     isCreator: !!u.is_creator,
     onboarded: !!u.onboarded,
     plan: planFor(u.id),
+    twoFactor: !!u.totp_enabled,
     createdAt: u.created_at,
   }
 }
@@ -40,7 +46,8 @@ r.post('/register', h(async (req, res) => {
     run("INSERT INTO subscriptions (user_id, plan, status) VALUES (?, 'free', 'active')", id)
     return id
   })
-  createSession(res, userId)
+  createSession(res, userId, req)
+  audit(req, 'auth.login', { userId, meta: { via: 'register' } })
   res.status(201).json({ user: publicUser(one('SELECT * FROM users WHERE id = ?', userId)) })
 }))
 
@@ -49,13 +56,62 @@ r.post('/login', h(async (req, res) => {
   rateLimit(`login:${req.ip}:${email}`, 8)
   const u = one('SELECT * FROM users WHERE email = ?', email)
   if (!u || !verifyPassword(String(req.body.password || ''), u.password_hash)) {
+    if (u) audit(req, 'auth.login_failed', { userId: u.id })
     throw new ApiError(401, 'invalid_credentials', 'E-Mail oder Passwort ist nicht korrekt.')
   }
-  createSession(res, u.id)
+  if (u.totp_enabled) {
+    // Second step: password was right, now the authenticator code is needed.
+    const challenge = crypto.randomBytes(32).toString('hex')
+    run("DELETE FROM login_challenges WHERE user_id = ? OR expires_at < datetime('now')", u.id)
+    run('INSERT INTO login_challenges (token_hash, user_id, expires_at) VALUES (?, ?, ?)', sha256(challenge), u.id, new Date(Date.now() + 5 * 60e3).toISOString().replace('T', ' ').slice(0, 19))
+    return res.json({ twoFactorRequired: true, challenge })
+  }
+  createSession(res, u.id, req)
+  audit(req, 'auth.login', { userId: u.id })
+  res.json({ user: publicUser(u) })
+}))
+
+/** Checks an authenticator code (with replay protection) or a one-time recovery code. */
+function checkSecondFactor(req, u, { code, recoveryCode }) {
+  if (code) {
+    const step = verifyCode(unseal(u.totp_secret), code)
+    if (step == null || (u.totp_last_step != null && step <= u.totp_last_step)) return false
+    run('UPDATE users SET totp_last_step = ? WHERE id = ?', step, u.id)
+    return true
+  }
+  if (recoveryCode) {
+    const hash = sha256(String(recoveryCode).trim().toUpperCase().replace(/[^A-Z0-9]/g, ''))
+    const hit = one('SELECT 1 FROM recovery_codes WHERE user_id = ? AND code_hash = ? AND used_at IS NULL', u.id, hash)
+    if (!hit) return false
+    run("UPDATE recovery_codes SET used_at = datetime('now') WHERE user_id = ? AND code_hash = ?", u.id, hash)
+    audit(req, 'auth.recovery_code_used', { userId: u.id })
+    return true
+  }
+  return false
+}
+
+r.post('/login/2fa', h(async (req, res) => {
+  rateLimit(`2fa:${req.ip}`, 10)
+  const ch = one("SELECT * FROM login_challenges WHERE token_hash = ? AND expires_at > datetime('now')", sha256(String(req.body.challenge || '')))
+  if (!ch) throw new ApiError(401, 'challenge_expired', 'Die Anmeldung ist abgelaufen. Bitte melde dich erneut an.')
+  if (ch.attempts >= 5) {
+    run('DELETE FROM login_challenges WHERE token_hash = ?', ch.token_hash)
+    throw new ApiError(429, 'rate_limited', 'Zu viele falsche Codes. Bitte melde dich erneut an.')
+  }
+  const u = one('SELECT * FROM users WHERE id = ?', ch.user_id)
+  if (!checkSecondFactor(req, u, req.body)) {
+    run('UPDATE login_challenges SET attempts = attempts + 1 WHERE token_hash = ?', ch.token_hash)
+    audit(req, 'auth.login_failed', { userId: u.id, meta: { step: '2fa' } })
+    throw new ApiError(401, 'invalid_code', 'Der Code ist nicht korrekt oder wurde bereits verwendet.')
+  }
+  run('DELETE FROM login_challenges WHERE token_hash = ?', ch.token_hash)
+  createSession(res, u.id, req)
+  audit(req, 'auth.login', { userId: u.id, meta: { twoFactor: true } })
   res.json({ user: publicUser(u) })
 }))
 
 r.post('/logout', (req, res) => {
+  if (req.user) audit(req, 'auth.logout')
   destroySession(req, res)
   res.json({ ok: true })
 })
@@ -70,9 +126,91 @@ r.post('/password', requireAuth, h(async (req, res) => {
   if (typeof next !== 'string' || next.length < 10) throw badRequest('Das neue Passwort muss mindestens 10 Zeichen lang sein.')
   run('UPDATE users SET password_hash = ? WHERE id = ?', hashPassword(next), req.user.id)
   run('DELETE FROM sessions WHERE user_id = ?', req.user.id)
-  createSession(res, req.user.id)
+  createSession(res, req.user.id, req)
+  audit(req, 'auth.password_changed')
   res.json({ ok: true })
 }))
+
+// ---------- Zwei-Faktor-Anmeldung ----------
+
+const newRecoveryCodes = (userId) => {
+  const codes = Array.from({ length: 10 }, () => crypto.randomBytes(5).toString('hex').toUpperCase().replace(/(.{5})/, '$1-'))
+  run('DELETE FROM recovery_codes WHERE user_id = ?', userId)
+  for (const c of codes) run('INSERT INTO recovery_codes (user_id, code_hash) VALUES (?, ?)', userId, sha256(c.replace('-', '')))
+  return codes
+}
+
+r.get('/2fa', requireAuth, (req, res) => {
+  res.json({
+    enabled: !!req.user.totp_enabled,
+    recoveryCodesLeft: one('SELECT COUNT(*) AS n FROM recovery_codes WHERE user_id = ? AND used_at IS NULL', req.user.id).n,
+  })
+})
+
+r.post('/2fa/setup', requireAuth, h(async (req, res) => {
+  if (req.user.totp_enabled) throw badRequest('Die Zwei-Faktor-Anmeldung ist bereits aktiv.')
+  const secret = newSecret()
+  run('UPDATE users SET totp_pending = ? WHERE id = ?', seal(secret), req.user.id)
+  const uri = otpauthUri(secret, req.user.email)
+  res.json({ secret, uri, qrSvg: await QRCode.toString(uri, { type: 'svg', margin: 1, width: 200 }) })
+}))
+
+r.post('/2fa/enable', requireAuth, h(async (req, res) => {
+  rateLimit(`2fa-enable:${req.user.id}`, 10)
+  const pending = req.user.totp_pending && unseal(req.user.totp_pending)
+  if (!pending) throw badRequest('Bitte starte die Einrichtung zuerst.')
+  const step = verifyCode(pending, req.body.code)
+  if (step == null) throw badRequest('Der Code ist nicht korrekt. Prüfe die Uhrzeit auf deinem Gerät und versuche es erneut.')
+  const codes = tx(() => {
+    run('UPDATE users SET totp_secret = ?, totp_pending = NULL, totp_enabled = 1, totp_last_step = ? WHERE id = ?', seal(pending), step, req.user.id)
+    return newRecoveryCodes(req.user.id)
+  })
+  audit(req, 'auth.2fa_enabled')
+  res.json({ ok: true, recoveryCodes: codes })
+}))
+
+r.post('/2fa/disable', requireAuth, h(async (req, res) => {
+  rateLimit(`2fa-disable:${req.user.id}`, 10)
+  if (!req.user.totp_enabled) throw badRequest('Die Zwei-Faktor-Anmeldung ist nicht aktiv.')
+  if (!verifyPassword(String(req.body.password || ''), req.user.password_hash)) throw badRequest('Das Passwort ist nicht korrekt.')
+  if (!checkSecondFactor(req, req.user, req.body)) throw badRequest('Der Code ist nicht korrekt.')
+  const required = one("SELECT o.name FROM org_members m JOIN organizations o ON o.id = m.org_id WHERE m.user_id = ? AND o.require_2fa = 1 LIMIT 1", req.user.id)
+  if (required) throw badRequest(`Die Organisation „${required.name}“ verlangt die Zwei-Faktor-Anmeldung.`)
+  tx(() => {
+    run('UPDATE users SET totp_secret = NULL, totp_pending = NULL, totp_enabled = 0, totp_last_step = NULL WHERE id = ?', req.user.id)
+    run('DELETE FROM recovery_codes WHERE user_id = ?', req.user.id)
+  })
+  audit(req, 'auth.2fa_disabled')
+  res.json({ ok: true })
+}))
+
+r.post('/2fa/recovery-codes', requireAuth, h(async (req, res) => {
+  if (!req.user.totp_enabled) throw badRequest('Die Zwei-Faktor-Anmeldung ist nicht aktiv.')
+  if (!checkSecondFactor(req, req.user, { code: req.body.code })) throw badRequest('Der Code ist nicht korrekt.')
+  res.json({ recoveryCodes: newRecoveryCodes(req.user.id) })
+}))
+
+// ---------- Sitzungen & Sicherheitsprotokoll ----------
+
+r.get('/sessions', requireAuth, (req, res) => {
+  res.json(all("SELECT token, created_at, last_seen_at, user_agent, ip FROM sessions WHERE user_id = ? AND expires_at > ? ORDER BY last_seen_at DESC", req.user.id, new Date().toISOString())
+    .map((x) => ({ id: x.token.slice(0, 16), createdAt: x.created_at, lastSeenAt: x.last_seen_at, userAgent: x.user_agent, ip: x.ip, current: x.token === req.user.session_hash })))
+})
+
+r.delete('/sessions/:id', requireAuth, h(async (req, res) => {
+  if (!/^[0-9a-f]{16}$/.test(req.params.id)) throw badRequest('Ungültige Sitzung.')
+  const n = run('DELETE FROM sessions WHERE user_id = ? AND substr(token, 1, 16) = ? AND token != ?', req.user.id, req.params.id, req.user.session_hash).changes
+  if (n) audit(req, 'auth.session_revoked')
+  res.json({ ok: true, revoked: Number(n) })
+}))
+
+r.delete('/sessions', requireAuth, h(async (req, res) => {
+  const n = run('DELETE FROM sessions WHERE user_id = ? AND token != ?', req.user.id, req.user.session_hash).changes
+  if (n) audit(req, 'auth.session_revoked', { meta: { count: Number(n) } })
+  res.json({ ok: true, revoked: Number(n) })
+}))
+
+r.get('/security-log', requireAuth, (req, res) => res.json(userAudit(req.user.id)))
 
 /**
  * Onboarding: stores the profile, self-assessed skills and creates the first goal,

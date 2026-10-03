@@ -1,7 +1,33 @@
 import crypto from 'node:crypto'
-import { one, run } from '../db.js'
+import { db, one, run, addColumn } from '../db.js'
 import { ApiError } from './http.js'
 import { PLANS } from './plans.js'
+import { sha256 } from './secrets.js'
+
+// Security columns and tables (sessions store only a hash of the token).
+addColumn('sessions', 'created_at', 'TEXT')
+addColumn('sessions', 'last_seen_at', 'TEXT')
+addColumn('sessions', 'user_agent', 'TEXT')
+addColumn('sessions', 'ip', 'TEXT')
+addColumn('users', 'totp_secret', 'TEXT')
+addColumn('users', 'totp_pending', 'TEXT')
+addColumn('users', 'totp_enabled', 'INTEGER NOT NULL DEFAULT 0')
+addColumn('users', 'totp_last_step', 'INTEGER')
+addColumn('organizations', 'require_2fa', 'INTEGER NOT NULL DEFAULT 0')
+db.exec(`
+CREATE TABLE IF NOT EXISTS recovery_codes (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  code_hash TEXT NOT NULL,
+  used_at TEXT,
+  PRIMARY KEY (user_id, code_hash)
+);
+CREATE TABLE IF NOT EXISTS login_challenges (
+  token_hash TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  expires_at TEXT NOT NULL
+);
+`)
 
 const COOKIE = 'jw_session'
 const SESSION_DAYS = 30
@@ -20,10 +46,12 @@ export function verifyPassword(password, stored) {
   return crypto.timingSafeEqual(expected, actual)
 }
 
-export function createSession(res, userId) {
+export function createSession(res, userId, req = null) {
   const token = crypto.randomBytes(32).toString('hex')
   const expires = new Date(Date.now() + SESSION_DAYS * 864e5)
-  run('INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)', token, userId, expires.toISOString())
+  const now = new Date().toISOString()
+  run('INSERT INTO sessions (token, user_id, expires_at, created_at, last_seen_at, user_agent, ip) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    sha256(token), userId, expires.toISOString(), now, now, String(req?.headers?.['user-agent'] || '').slice(0, 300) || null, req?.ip ?? null)
   res.cookie(COOKIE, token, {
     httpOnly: true,
     sameSite: 'lax',
@@ -36,21 +64,26 @@ export function createSession(res, userId) {
 
 export function destroySession(req, res) {
   const token = req.cookies?.[COOKIE]
-  if (token) run('DELETE FROM sessions WHERE token = ?', token)
+  if (token) run('DELETE FROM sessions WHERE token IN (?, ?)', sha256(token), token)
   res.clearCookie(COOKIE, { path: '/' })
 }
 
 /** Attaches req.user when a valid session cookie is present. */
 export function loadUser(req, _res, next) {
   const token = req.cookies?.[COOKIE]
-  if (token) {
-    const row = one(
-      `SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id
-       WHERE s.token = ? AND s.expires_at > ?`,
-      token,
-      new Date().toISOString(),
-    )
-    if (row) req.user = row
+  if (token && /^[0-9a-f]{64}$/.test(token)) {
+    const now = new Date()
+    const hash = sha256(token)
+    let row = one('SELECT u.*, s.token AS session_hash, s.last_seen_at AS session_seen FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ? AND s.expires_at > ?', hash, now.toISOString())
+    if (!row) {
+      // Sessions from before token hashing: upgrade in place.
+      row = one('SELECT u.*, s.token AS session_hash, s.last_seen_at AS session_seen FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ? AND s.expires_at > ?', token, now.toISOString())
+      if (row) { run('UPDATE sessions SET token = ? WHERE token = ?', hash, token); row.session_hash = hash }
+    }
+    if (row) {
+      if (!row.session_seen || now - new Date(row.session_seen) > 5 * 60e3) run('UPDATE sessions SET last_seen_at = ? WHERE token = ?', now.toISOString(), row.session_hash)
+      req.user = row
+    }
   }
   next()
 }
