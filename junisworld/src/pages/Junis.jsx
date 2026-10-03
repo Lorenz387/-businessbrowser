@@ -102,7 +102,7 @@ function Chat() {
         </div>
       </aside>
       <section className="min-w-0 flex flex-col min-h-[60vh]">
-        {!aiAvailable && <Card className="p-4 mb-4 text-sm text-muted">Junis AI ist auf diesem Server noch nicht eingerichtet. Der Betreiber muss einen Anthropic-API-Schlüssel hinterlegen (ANTHROPIC_API_KEY).</Card>}
+        {!aiAvailable && <Card className="p-4 mb-4 text-sm text-muted">Junis AI ist auf diesem Server noch nicht eingerichtet. Der Betreiber muss einen API-Schlüssel hinterlegen (ANTHROPIC_API_KEY oder GEMINI_API_KEY).</Card>}
         {loadingConv ? <Loading /> : convError ? <ErrorState error={convError} what="Das Gespräch" compact /> : (
           <div className="flex-1 space-y-6 pb-6">
             {!messages.length && aiAvailable && (

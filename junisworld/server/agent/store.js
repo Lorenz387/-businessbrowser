@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS agent_messages (
 export const PROVIDERS = {
   anthropic: { label: 'Claude (Anthropic)', baseUrl: null, defaultModel: 'claude-opus-5', needsKey: true, envKey: 'ANTHROPIC_API_KEY' },
   openai: { label: 'OpenAI', baseUrl: 'https://api.openai.com/v1', defaultModel: null, needsKey: true, envKey: 'OPENAI_API_KEY' },
+  gemini: { label: 'Google Gemini', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', defaultModel: 'gemini-3.8-flash', needsKey: true, envKey: 'GEMINI_API_KEY' },
   xai: { label: 'xAI (Grok)', baseUrl: 'https://api.x.ai/v1', defaultModel: null, needsKey: true, envKey: 'XAI_API_KEY' },
   ollama: { label: 'Ollama (lokal)', baseUrl: 'http://localhost:11434/v1', defaultModel: null, needsKey: false, envKey: null },
   custom: { label: 'OpenAI-kompatibel (eigene URL)', baseUrl: null, defaultModel: null, needsKey: false, envKey: null },

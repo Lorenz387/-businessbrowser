@@ -43,7 +43,7 @@ export default function Studio() {
   const print = (title, el) => { if (!printText(title, el?.innerHTML || '')) toast('Pop-up blockiert — bitte erlauben.', 'bad') }
 
   if (!g.aiAvailable) {
-    return <EmptyState title="Das KI-Kochstudio braucht Junis AI." text="Auf diesem Server ist kein KI-Schlüssel hinterlegt (ANTHROPIC_API_KEY). Alle anderen GastroFlow-Bereiche funktionieren ohne KI." />
+    return <EmptyState title="Das KI-Kochstudio braucht Junis AI." text="Auf diesem Server ist kein KI-Schlüssel hinterlegt (ANTHROPIC_API_KEY oder GEMINI_API_KEY). Alle anderen GastroFlow-Bereiche funktionieren ohne KI." />
   }
   return (
     <>

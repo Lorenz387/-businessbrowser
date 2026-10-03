@@ -352,7 +352,7 @@ function Profiles({ data, reload }) {
 function Providers({ data, reload }) {
   return (
     <>
-      <p className="text-sm text-muted mb-4">Schlüssel werden in der lokalen JunisWorld-Datenbank auf diesem Rechner gespeichert (unverschlüsselt) und nie an den Browser zurückgeschickt. Alternativ kannst du sie in der Datei <code>.env</code> eintragen (<code>ANTHROPIC_API_KEY</code>, <code>OPENAI_API_KEY</code>, <code>XAI_API_KEY</code>). Kosten rechnet jeder Anbieter direkt mit dir ab.</p>
+      <p className="text-sm text-muted mb-4">Schlüssel werden in der lokalen JunisWorld-Datenbank auf diesem Rechner gespeichert (unverschlüsselt) und nie an den Browser zurückgeschickt. Alternativ kannst du sie in der Datei <code>.env</code> eintragen (<code>ANTHROPIC_API_KEY</code>, <code>OPENAI_API_KEY</code>, <code>GEMINI_API_KEY</code>, <code>XAI_API_KEY</code>). Kosten rechnet jeder Anbieter direkt mit dir ab.</p>
       {data.providers.map((p) => <ProviderCard key={p.id} p={p} reload={reload} />)}
     </>
   )

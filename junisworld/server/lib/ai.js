@@ -5,17 +5,26 @@ import { ApiError } from './http.js'
 import { entitlements } from './auth.js'
 import { activeGoals, goalAnalysis, userSkills, skillInfo } from './engine.js'
 import { SKILLS } from './catalog.js'
+import { geminiCreate } from './gemini.js'
 
 const MODEL = process.env.JUNIS_MODEL || 'claude-opus-5'
 const USE_FALLBACKS = process.env.JUNIS_AI_FALLBACKS !== 'off'
 
 let client = null
+const hasAnthropic = () => !!(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN)
+/** Which backend Junis AI uses: JUNIS_AI_PROVIDER=anthropic|gemini, otherwise whichever key is configured (Anthropic first). */
+export function aiProvider() {
+  const want = (process.env.JUNIS_AI_PROVIDER || '').toLowerCase()
+  if (want === 'gemini') return process.env.GEMINI_API_KEY ? 'gemini' : null
+  if (want === 'anthropic') return hasAnthropic() ? 'anthropic' : null
+  return hasAnthropic() ? 'anthropic' : process.env.GEMINI_API_KEY ? 'gemini' : null
+}
 export function aiAvailable() {
-  return !!(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN)
+  return !!aiProvider()
 }
 function getClient() {
   if (!aiAvailable()) {
-    throw new ApiError(503, 'ai_unavailable', 'Junis AI ist auf diesem Server noch nicht eingerichtet. Der Betreiber muss einen Anthropic-API-Schlüssel hinterlegen (ANTHROPIC_API_KEY).')
+    throw new ApiError(503, 'ai_unavailable', 'Junis AI ist auf diesem Server noch nicht eingerichtet. Der Betreiber muss einen API-Schlüssel hinterlegen (ANTHROPIC_API_KEY oder GEMINI_API_KEY).')
   }
   client ??= new Anthropic()
   return client
@@ -82,6 +91,11 @@ export function buildUserContext(userId) {
 }
 
 async function create(params) {
+  if (aiProvider() === 'gemini') {
+    const msg = await geminiCreate(params)
+    if (msg.stop_reason === 'refusal') throw new ApiError(422, 'ai_refused', 'Junis kann bei dieser Anfrage nicht helfen. Formuliere sie bitte anders.')
+    return msg
+  }
   const c = getClient()
   try {
     const req = { model: MODEL, ...params }
