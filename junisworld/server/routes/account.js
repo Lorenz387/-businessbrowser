@@ -1,5 +1,6 @@
 import { Router } from 'express'
-import { handOverOrgRecords } from '../lib/workspace.js'
+import { handOverOrgRecords, resolveWorkspace } from '../lib/workspace.js'
+import { searchApps, connectorContext } from '../lib/connectors.js'
 import { audit } from '../lib/audit.js'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -96,7 +97,11 @@ r.get('/search', h(async (req, res) => {
   for (const l of all('SELECT id, title FROM lessons WHERE user_id = ? AND (lower(title) LIKE ? OR lower(content) LIKE ?) LIMIT 5', userId, like, like)) results.push({ type: 'Lektion', title: l.title, href: `/learn/lessons/${l.id}` })
   for (const k of all('SELECT id, title, type FROM knowledge_items WHERE user_id = ? AND (lower(title) LIKE ? OR lower(content) LIKE ? OR lower(tags) LIKE ?) LIMIT 5', userId, like, like, like)) results.push({ type: 'Notiz', title: k.title, href: `/knowledge/${k.id}` })
   for (const d of all('SELECT id, filename FROM documents WHERE user_id = ? AND org_id IS NULL AND (lower(filename) LIKE ? OR lower(summary) LIKE ?) LIMIT 5', userId, like, like)) results.push({ type: 'Dokument', title: d.filename, href: `/knowledge/documents/${d.id}` })
-  for (const p of all('SELECT id, title, company FROM talent_projects WHERE owner_id = ? AND (lower(title) LIKE ? OR lower(description) LIKE ?) LIMIT 5', userId, like, like)) results.push({ type: 'Ausschreibung', title: p.title, subtitle: p.company, href: `/talent/projects/${p.id}` })
+  // App data of the current workspace (private or company), filtered by the person's rights.
+  try {
+    const ws = resolveWorkspace(req)
+    results.unshift(...searchApps(connectorContext(req, ws), q))
+  } catch { /* workspace not accessible (e.g. 2FA required) — app results are skipped */ }
   for (const p of all("SELECT id, title, company FROM talent_projects WHERE status = 'open' AND owner_id != ? AND (lower(title) LIKE ? OR lower(domains) LIKE ? OR lower(skills) LIKE ?) LIMIT 5", userId, like, like, like)) results.push({ type: 'Talent-Projekt', title: p.title, subtitle: p.company, href: `/talent?tab=explore&q=${encodeURIComponent(p.title)}` })
   for (const c of CAREER_PATHS.filter((c) => has(c.title) || has(c.field))) results.push({ type: 'Karriereweg', title: c.title, href: `/career/${c.id}` })
   for (const m of MISSIONS.filter((m) => has(m.title))) results.push({ type: 'Mission', title: m.title, href: `/missions?m=${m.id}` })

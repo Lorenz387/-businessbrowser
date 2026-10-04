@@ -65,7 +65,7 @@ function Chat() {
     setPending(true)
     try {
       const r = await post('/chat', { message: msg, conversationId: id ? Number(id) : undefined })
-      setMessages((m) => [...m, { role: 'assistant', content: r.reply, usedKnowledge: r.usedKnowledge }])
+      setMessages((m) => [...m, { role: 'assistant', content: r.reply, usedKnowledge: r.usedKnowledge, usedApps: r.usedApps }])
       if (!id) navigate(`/junis/${r.conversationId}`, { replace: true })
       list.reload()
     } catch (e) {
@@ -102,6 +102,7 @@ function Chat() {
         </div>
       </aside>
       <section className="min-w-0 flex flex-col min-h-[60vh]">
+        {list.data?.workspace?.type === 'org' && <Card className="p-3 mb-4 text-sm text-ink-2">Firmenmodus: Junis kennt die freigegebenen App-Daten und das Firmenwissen von <b>{list.data.workspace.name}</b>, soweit deine Rolle sie sehen darf. Diese Gespräche erscheinen nur im Firmenbereich.</Card>}
         {!aiAvailable && <Card className="p-4 mb-4 text-sm text-muted">Junis AI ist auf diesem Server noch nicht eingerichtet. Der Betreiber muss einen API-Schlüssel hinterlegen (ANTHROPIC_API_KEY oder GEMINI_API_KEY).</Card>}
         {loadingConv ? <Loading /> : convError ? <ErrorState error={convError} what="Das Gespräch" compact /> : (
           <div className="flex-1 space-y-6 pb-6">
@@ -120,6 +121,7 @@ function Chat() {
                   <>
                     <Markdown>{m.content}</Markdown>
                     {m.usedKnowledge?.length > 0 && <p className="text-xs text-muted mt-2">Aus deiner Wissensbibliothek: {m.usedKnowledge.join(', ')}</p>}
+                    {m.usedApps && <p className="text-xs text-muted mt-1">Mit Daten aus deinen Apps{list.data?.workspace?.type === 'org' ? ` (${list.data.workspace.name})` : ''}.</p>}
                   </>
                 )}
               </div>

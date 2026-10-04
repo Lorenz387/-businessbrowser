@@ -1,9 +1,10 @@
 import { Router } from 'express'
+import { audit } from '../../lib/audit.js'
 import fs from 'node:fs'
 import crypto from 'node:crypto'
 import multer from 'multer'
 import { one, all, run, tx, parseJSON, UPLOAD_DIR } from '../../db.js'
-import { h, str, int, oneOf, badRequest, notFound, forbidden } from '../../lib/http.js'
+import { h, str, int, oneOf, badRequest, notFound, forbidden, ApiError } from '../../lib/http.js'
 import { aiAvailable } from '../../lib/ai.js'
 import { consumeDaily } from '../../lib/usage.js'
 import { notify } from '../../lib/engine.js'
@@ -284,6 +285,23 @@ r.post('/apps/talent/applications/:id/respond', h(async (req, res) => {
   res.json({ ok: true })
 }))
 
+/** Connection Talent → Business: a hired talent of a company project joins the company workspace. */
+r.post('/apps/talent/applications/:id/invite-to-org', h(async (req, res) => {
+  const a = one('SELECT a.*, p.org_id, p.title FROM talent_applications a JOIN talent_projects p ON p.id = a.project_id WHERE a.id = ?', Number(req.params.id))
+  if (!a?.org_id) throw notFound('Diese Bewerbung gehört zu keiner Firmenausschreibung.')
+  if (!['owner', 'admin'].includes(orgRole(a.org_id, uid(req)))) throw forbidden('Nur Owner und Admins laden ins Unternehmen ein.')
+  if (!['accepted', 'shortlisted', 'hired'].includes(a.status)) throw badRequest('Einladen ist erst möglich, wenn das Talent zugesagt hat.')
+  const talent = one('SELECT id, email, name FROM users WHERE id = ?', a.talent_id)
+  if (one('SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ?', a.org_id, talent.id)) throw badRequest(`${talent.name} gehört bereits zum Unternehmen.`)
+  const org = one('SELECT name, seats FROM organizations WHERE id = ?', a.org_id)
+  const used = one('SELECT COUNT(*) AS n FROM org_members WHERE org_id = ?', a.org_id).n + one('SELECT COUNT(*) AS n FROM org_invites WHERE org_id = ? AND accepted_at IS NULL', a.org_id).n
+  if (used >= org.seats) throw new ApiError(402, 'seats_full', `Alle ${org.seats} Plätze von „${org.name}“ sind belegt.`)
+  run("INSERT INTO org_invites (org_id, email, role, invited_by) VALUES (?, ?, 'member', ?) ON CONFLICT(org_id, email) DO UPDATE SET accepted_at = NULL", a.org_id, talent.email, uid(req))
+  notify(talent.id, 'org', `${org.name} lädt dich nach deiner Zusage für „${a.title}“ ins Team ein.`, { link: '/business', dedupeKey: `talent-org-invite:${a.org_id}:${talent.id}` })
+  audit(req, 'org.invite', { orgId: a.org_id, target: talent.email, meta: { role: 'member', via: 'talent' } })
+  res.json({ ok: true })
+}))
+
 // =============== Company side ===============
 
 r.get('/apps/talent/company', h(async (req, res) => {
@@ -353,9 +371,10 @@ const STATUS_ORDER = { interested: 0, invited: 1, accepted: 2, shortlisted: 3, h
 r.get('/apps/talent/projects/:id', h(async (req, res) => {
   const p = ownProject(req)
   const cards = all('SELECT * FROM talent_applications WHERE project_id = ?', p.id)
-    .map((a) => talentCard(a, REVEALED.has(a.status)))
+    .map((a) => ({ ...talentCard(a, REVEALED.has(a.status)), inOrg: p.org_id && REVEALED.has(a.status) ? !!one('SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ?', p.org_id, a.talent_id) : null }))
     .sort((a, b) => (b.score ?? 0) - (a.score ?? 0) || STATUS_ORDER[a.status] - STATUS_ORDER[b.status])
-  res.json({ ...projectOut(p), candidates: cards, types: TYPES, seniority: SENIORITY })
+  const canInviteToOrg = !!p.org_id && ['owner', 'admin'].includes(orgRole(p.org_id, uid(req)))
+  res.json({ ...projectOut(p), candidates: cards, canInviteToOrg, types: TYPES, seniority: SENIORITY })
 }))
 
 r.patch('/apps/talent/projects/:id', h(async (req, res) => {

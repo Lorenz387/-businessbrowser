@@ -135,12 +135,15 @@ async function structured(system, userText, schema, { maxTokens = 16000, effort 
 
 // ---------- Chat ----------
 
-export async function chat(userId, history, { pageContext, knowledge = [] } = {}) {
+export async function chat(userId, history, { pageContext, knowledge = [], workspaceContext = '' } = {}) {
   const system = [
     { type: 'text', text: BASE_SYSTEM, cache_control: { type: 'ephemeral' } },
     { type: 'text', text: `Aktueller Nutzerkontext:\n${buildUserContext(userId)}` },
   ]
   if (pageContext) system.push({ type: 'text', text: `Der Nutzer fragt aus diesem Bereich heraus:\n${pageContext}` })
+  if (workspaceContext) {
+    system.push({ type: 'text', text: `Daten aus den JunisWorld-Apps (aktueller Arbeitsbereich, bereits auf die Rechte des Nutzers gefiltert). Nutze sie für Fragen zu Verträgen, Fristen, Websites, Restaurants, Ausschreibungen oder Firmenwissen; nenne die App als Quelle; erfinde keine Einträge, die hier nicht stehen; verweise für Änderungen auf die jeweilige App.\n\n${workspaceContext}` })
+  }
   if (knowledge.length) {
     system.push({ type: 'text', text: `Relevante Einträge aus der persönlichen Wissensbibliothek des Nutzers (nur verwenden, wenn passend; als Quelle nennen):\n${knowledge.map((k) => `### ${k.title}\n${k.content.slice(0, 3000)}`).join('\n\n')}` })
   }

@@ -10,6 +10,7 @@ import { useWorkspace } from '../lib/workspace.jsx'
 
 const MAIN_NAV = [
   ['/', 'Home'],
+  ['/cockpit', 'Cockpit'],
   ['/goals', 'Goals'],
   ['/learn', 'Learn'],
   ['/practice', 'Practice'],
@@ -144,6 +145,7 @@ const COMMANDS = [
   { label: 'Talent-Profil öffnen', to: '/talent', keywords: 'talent job jobs freelance lebenslauf cv bewerbung' },
   { label: 'Fachinterview starten', to: '/talent?tab=interview', keywords: 'interview talent bewerbung' },
   { label: 'Talente finden (Ausschreibung)', to: '/talent?side=company', keywords: 'recruiting stelle ausschreibung kandidaten hiring' },
+  { label: 'Cockpit öffnen', to: '/cockpit', keywords: 'cockpit überblick dashboard firma aufgaben fristen' },
   { label: 'GastroFlow öffnen', to: '/apps/gastro', keywords: 'restaurant gastro reservierung tisch speisekarte küche' },
   { label: 'PersonalAI öffnen', to: '/apps/personal-ai', keywords: 'agent personal ai code befehl' },
   { label: 'Tarif ändern', to: '/billing', keywords: 'abo billing tarif' },
@@ -271,7 +273,7 @@ function WorkspaceBanner() {
     <div className="bg-accent-soft/60 border-b border-accent/15 text-sm">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-10 py-1.5 flex flex-wrap gap-x-3 items-center text-accent">
         <span>Firmenbereich <b>{current.orgName}</b>{w ? ` · ${w.roleLabel}` : ''}</span>
-        <span className="text-muted">Apps zeigen Firmendaten. Lernen, Ziele und Junis bleiben privat.</span>
+        <span className="text-muted">Apps, Cockpit, Suche und Junis nutzen Firmendaten. Lernen, Ziele und Skills bleiben privat.</span>
       </div>
     </div>
   )

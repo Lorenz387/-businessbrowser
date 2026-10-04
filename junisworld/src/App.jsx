@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import Cockpit from './pages/Cockpit.jsx'
 import { WorkspaceProvider } from './lib/workspace.jsx'
 import { useAuth } from './lib/auth.jsx'
 import Layout from './components/Layout.jsx'
@@ -72,6 +73,7 @@ export default function App() {
       <Route path="/register" element={<Navigate to="/" replace />} />
       <Route element={<Layout />}>
         <Route index element={<Home />} />
+        <Route path="cockpit" element={<Cockpit />} />
         <Route path="weekly" element={<Weekly />} />
         <Route path="goals" element={<GoalsList />} />
         <Route path="goals/new" element={<GoalNew />} />

@@ -116,4 +116,11 @@ Junis AI läuft wahlweise über Anthropic Claude (`ANTHROPIC_API_KEY`, Modell `J
 - Business → „Apps & Sicherheit“: Apps je Unternehmen freigeben/sperren, Zwei-Faktor-Pflicht, Protokoll.
 - Erinnerungen und Hinweise zu Firmendaten gehen an Owner/Admins/Manager; Links öffnen automatisch den richtigen Arbeitsbereich.
 - Löscht eine Person ihr Konto, bleiben die von ihr angelegten Firmendaten beim Unternehmen.
-- Noch offen: Single Sign-on (SSO/SAML), feinere Rechte je App, Firmenwissen für Junis AI (Phase „Verbindung“).
+- Noch offen: Single Sign-on (SSO/SAML), feinere Rechte je App.
+
+**Verbindung der Apps** (`server/lib/connectors.js`)
+- Jede App liefert für den aktuellen Arbeitsbereich und die Rolle der Person: Überblick, Suche und Kontext für Junis AI. Neue Apps hängen sich mit einem Connector an.
+- **Cockpit** (`/cockpit`): Kennzahlen aller freigegebenen Apps und „Was jetzt zu tun ist“ (Kündigungsfristen, Nachbestellungen, kritische Bewertungen und Barrieren, Bewerbungen) — sortiert nach Dringlichkeit.
+- **Suche** (Strg+K) findet Verträge, Websites, Restaurants, Gerichte, Ausschreibungen und Firmenwissen des aktuellen Bereichs.
+- **Junis AI im Firmenmodus**: kennt die freigegebenen App-Daten und das Firmenwissen, gefiltert auf die Rechte der Person (z. B. Umsätze nur mit GastroFlow-Rolle Inhaber/Betriebsleitung). Gespräche gehören zum Arbeitsbereich, in dem sie geführt wurden. Private Daten gelangen nie in den Firmenmodus.
+- **Talent → Team**: Talente, die eine Firmenausschreibung angenommen haben, laden Owner/Admins mit einem Klick ins Unternehmen ein.

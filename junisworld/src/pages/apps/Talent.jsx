@@ -547,6 +547,13 @@ export function TalentProject() {
             {c.workSamples?.length > 0 && <p className="text-xs text-ok mt-1">✓ Arbeitsproben: {c.workSamples.map((w) => `${w.task} (${w.score} %)`).filter((x, i, a) => a.indexOf(x) === i).join(', ')}</p>}
             {c.knowledgeChecks?.length > 0 && <p className="text-xs text-muted mt-1">Wissens-Checks bestanden: {c.knowledgeChecks.map((k) => `${k.skill} (${k.score} %)`).join(', ')}</p>}
             {c.motivation && <p className="text-sm mt-2 border-l-2 border-line pl-3">„{c.motivation}“</p>}
+            {data.canInviteToOrg && c.inOrg === false && (
+              <div className="mt-2 text-sm flex flex-wrap items-center gap-2">
+                <span className="text-muted">Noch nicht im Unternehmen.</span>
+                <Button size="sm" onClick={() => post(`/apps/talent/applications/${c.applicationId}/invite-to-org`).then(() => { toast('Einladung ins Unternehmen gesendet.'); reload() }).catch((e) => toast(e.message, 'bad'))}>Ins Team einladen</Button>
+              </div>
+            )}
+            {c.inOrg && <p className="text-xs text-ok mt-2">✓ Mitglied im Unternehmen</p>}
             {c.experience?.length > 0 && <ul className="text-sm mt-2">{c.experience.map((e, i) => <li key={i}>{e.title} · {e.org} ({e.from}–{e.to})</li>)}</ul>}
             <div className="flex flex-wrap gap-2 mt-3">
               {['matched', 'interested', 'declined'].includes(c.status) && <Button size="sm" variant="primary" onClick={() => { setInvite(c); setMessage('') }}>Einladen</Button>}

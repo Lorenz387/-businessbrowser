@@ -1,4 +1,7 @@
 import { Router } from 'express'
+import { addColumn } from '../db.js'
+import { resolveWorkspace } from '../lib/workspace.js'
+import { aiWorkspaceContext, connectorContext } from '../lib/connectors.js'
 import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
@@ -35,15 +38,25 @@ function searchKnowledge(userId, text, limit = 4) {
   return [...scored.values()].sort((a, b) => b.score - a.score).slice(0, limit)
 }
 
+// Conversations belong to the workspace they were held in (company data never leaks into the private list).
+addColumn('conversations', 'org_id', 'INTEGER REFERENCES organizations(id) ON DELETE CASCADE')
+const convScope = (req) => {
+  const ws = resolveWorkspace(req)
+  return ws.type === 'org' ? ['org_id = ?', [ws.orgId], ws] : ['org_id IS NULL', [], ws]
+}
+
 r.get('/conversations', h(async (req, res) => {
+  const [w, p, ws] = convScope(req)
   res.json({
-    conversations: all('SELECT id, title, context_type, context_id, updated_at FROM conversations WHERE user_id = ? ORDER BY updated_at DESC LIMIT 100', uid(req)),
+    conversations: all(`SELECT id, title, context_type, context_id, updated_at FROM conversations WHERE user_id = ? AND ${w} ORDER BY updated_at DESC LIMIT 100`, uid(req), ...p),
     aiAvailable: aiAvailable(),
+    workspace: { type: ws.type, name: ws.orgName || null },
   })
 }))
 
 r.get('/conversations/:id', h(async (req, res) => {
-  const c = one('SELECT * FROM conversations WHERE id = ? AND user_id = ?', Number(req.params.id), uid(req))
+  const [w, p] = convScope(req)
+  const c = one(`SELECT * FROM conversations WHERE id = ? AND user_id = ? AND ${w}`, Number(req.params.id), uid(req), ...p)
   if (!c) throw notFound('Dieses Gespräch existiert nicht.')
   res.json({ ...c, messages: all('SELECT id, role, content, created_at FROM messages WHERE conversation_id = ? ORDER BY id', c.id) })
 }))
@@ -63,22 +76,24 @@ r.post('/chat', h(async (req, res) => {
   const contextType = oneOf(req.body.contextType, ['general', 'project', 'lesson', 'skill', 'goal', 'mission', 'career', 'knowledge'], { fallback: 'general' })
   const contextId = req.body.contextId != null ? String(req.body.contextId).slice(0, 80) : null
   const pageContext = buildPageContext(userId, contextType, contextId)
-  let conv = req.body.conversationId ? one('SELECT * FROM conversations WHERE id = ? AND user_id = ?', Number(req.body.conversationId), userId) : null
+  const [w, p, ws] = convScope(req)
+  let conv = req.body.conversationId ? one(`SELECT * FROM conversations WHERE id = ? AND user_id = ? AND ${w}`, Number(req.body.conversationId), userId, ...p) : null
   if (req.body.conversationId && !conv) throw notFound('Dieses Gespräch existiert nicht.')
   consumeDaily(userId, 'ai_messages')
   if (!conv) {
     const title = message.length > 60 ? `${message.slice(0, 57)}…` : message
-    const c = run('INSERT INTO conversations (user_id, title, context_type, context_id) VALUES (?, ?, ?, ?)', userId, title, contextType, contextId)
+    const c = run('INSERT INTO conversations (user_id, org_id, title, context_type, context_id) VALUES (?, ?, ?, ?, ?)', userId, ws.orgId, title, contextType, contextId)
     conv = one('SELECT * FROM conversations WHERE id = ?', Number(c.lastInsertRowid))
   }
   const history = all('SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 30', conv.id).reverse()
   history.push({ role: 'user', content: message })
-  const knowledge = searchKnowledge(userId, message)
-  const reply = await chat(userId, history, { pageContext, knowledge })
+  const knowledge = ws.type === 'private' ? searchKnowledge(userId, message) : []
+  const workspaceContext = aiWorkspaceContext(connectorContext(req, ws), message)
+  const reply = await chat(userId, history, { pageContext, knowledge, workspaceContext })
   run("INSERT INTO messages (conversation_id, role, content) VALUES (?, 'user', ?)", conv.id, message)
   run("INSERT INTO messages (conversation_id, role, content) VALUES (?, 'assistant', ?)", conv.id, reply)
   run("UPDATE conversations SET updated_at = datetime('now') WHERE id = ?", conv.id)
-  res.json({ conversationId: conv.id, reply, usedKnowledge: knowledge.map((k) => k.title) })
+  res.json({ conversationId: conv.id, reply, usedKnowledge: knowledge.map((k) => k.title), usedApps: !!workspaceContext, workspace: { type: ws.type, name: ws.orgName || null } })
 }))
 
 function buildPageContext(userId, type, id) {
