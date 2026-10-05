@@ -20,6 +20,8 @@ export const APPS = {
   accessibility: { name: 'Barrierefreiheit-Scanner', org: true },
   gastro: { name: 'GastroFlow', org: true },
   talent: { name: 'Talent (Ausschreibungen)', org: true },
+  // memberWrite: every member works with the data (own/assigned items); deleting others' items stays with managers.
+  office: { name: 'Büro-Assistent', org: true, memberWrite: true },
   'personal-ai': { name: 'PersonalAI', org: false },
 }
 
@@ -62,7 +64,8 @@ export function appScope(req, appId) {
   const uid = req.user.id
   return {
     ...ws,
-    canWrite: ws.type === 'private' || ORG_WRITE_ROLES.includes(ws.role),
+    canWrite: ws.type === 'private' || ORG_WRITE_ROLES.includes(ws.role) || !!APPS[appId]?.memberWrite,
+    isManager: ws.type === 'private' || ORG_WRITE_ROLES.includes(ws.role),
     where: (alias = '', userCol = 'user_id') => (ws.type === 'org' ? [`${alias}org_id = ?`, [ws.orgId]] : [`${alias}${userCol} = ? AND ${alias}org_id IS NULL`, [uid]]),
     requireWrite() {
       if (!this.canWrite) throw forbidden('Im Unternehmensbereich dürfen nur Owner, Admins und Manager Daten ändern. Du hast Lesezugriff.')
@@ -88,7 +91,8 @@ export function recipientsFor(record, userCol = 'user_id') {
 export const orgRole = (orgId, userId) => one('SELECT role FROM org_members WHERE org_id = ? AND user_id = ?', orgId, userId)?.role ?? null
 
 /** Tables whose records can belong to a company workspace, with the column of the person who created them. */
-export const ORG_SCOPED = [['contracts', 'user_id'], ['a11y_sites', 'user_id'], ['talent_projects', 'owner_id'], ['gastro_restaurants', 'owner_id'], ['documents', 'user_id']]
+export const ORG_SCOPED = [['contracts', 'user_id'], ['a11y_sites', 'user_id'], ['talent_projects', 'owner_id'], ['gastro_restaurants', 'owner_id'], ['documents', 'user_id'],
+  ['office_tasks', 'created_by'], ['office_inbox', 'user_id'], ['office_templates', 'user_id']]
 // Each app adds `org_id` to its own table right after creating it (see addOrgColumn); documents are core.
 export const addOrgColumn = (table) => addColumn(table, 'org_id', 'INTEGER REFERENCES organizations(id) ON DELETE CASCADE')
 addOrgColumn('documents')

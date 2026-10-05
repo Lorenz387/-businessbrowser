@@ -146,6 +146,7 @@ const COMMANDS = [
   { label: 'Fachinterview starten', to: '/talent?tab=interview', keywords: 'interview talent bewerbung' },
   { label: 'Talente finden (Ausschreibung)', to: '/talent?side=company', keywords: 'recruiting stelle ausschreibung kandidaten hiring' },
   { label: 'Cockpit öffnen', to: '/cockpit', keywords: 'cockpit überblick dashboard firma aufgaben fristen' },
+  { label: 'Büro-Assistent öffnen', to: '/apps/office', keywords: 'büro aufgaben wiedervorlage posteingang brief vorlage post' },
   { label: 'GastroFlow öffnen', to: '/apps/gastro', keywords: 'restaurant gastro reservierung tisch speisekarte küche' },
   { label: 'PersonalAI öffnen', to: '/apps/personal-ai', keywords: 'agent personal ai code befehl' },
   { label: 'Tarif ändern', to: '/billing', keywords: 'abo billing tarif' },

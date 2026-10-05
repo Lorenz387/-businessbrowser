@@ -27,6 +27,7 @@ import { AccessibilityHome, AccessibilitySite, AccessibilityScan } from './pages
 import { ContractsHome, ContractView } from './pages/apps/Contracts.jsx'
 import Talent, { TalentProject, LegacyTalentRedirect } from './pages/apps/Talent.jsx'
 import { GastroHome, GastroWorkspace } from './pages/apps/gastro/GastroFlow.jsx'
+import Office from './pages/apps/Office.jsx'
 
 function NotFound() {
   return (
@@ -106,6 +107,7 @@ export default function App() {
         <Route path="apps/accessibility/scans/:scanId" element={<AccessibilityScan />} />
         <Route path="apps/contracts" element={<ContractsHome />} />
         <Route path="apps/contracts/:id" element={<ContractView />} />
+        <Route path="apps/office" element={<Office />} />
         <Route path="apps/gastro" element={<GastroHome />} />
         <Route path="apps/gastro/:rid" element={<GastroWorkspace />} />
         <Route path="apps/gastro/:rid/:section" element={<GastroWorkspace />} />

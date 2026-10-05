@@ -17,6 +17,7 @@ import contractRoutes from './apps/contracts/routes.js'
 import talentRoutes from './apps/talent/routes.js'
 import gastroRoutes from './apps/gastro/routes.js'
 import connectRoutes from './routes/connect.js'
+import officeRoutes from './apps/office/routes.js'
 import gastroPosWebhook from './apps/gastro/pos.js'
 import { PLANS } from './lib/plans.js'
 
@@ -83,7 +84,7 @@ export function createApp() {
   })
   app.use('/api/auth', authRoutes)
   app.use('/api', gastroPosWebhook)
-  app.use('/api', requireAuth, coreRoutes, assistantRoutes, accountRoutes, orgRoutes, agentRoutes, a11yRoutes, contractRoutes, talentRoutes, gastroRoutes, connectRoutes)
+  app.use('/api', requireAuth, coreRoutes, assistantRoutes, accountRoutes, orgRoutes, agentRoutes, a11yRoutes, contractRoutes, talentRoutes, gastroRoutes, officeRoutes, connectRoutes)
   app.use('/api', (_req, _res, next) => next(new ApiError(404, 'not_found', 'Diese Schnittstelle existiert nicht.')))
 
   // Serve the built frontend in production.

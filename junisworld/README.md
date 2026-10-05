@@ -97,6 +97,14 @@ Proof of Skill: Skills zählen stärker, wenn sie im Interview belegt oder in Ju
 `server/apps/gastro/`, `src/pages/apps/gastro/`. Nachbau des GastroFlow-Prototyps als native JunisWorld-App (gleiche Anmeldung, Datenbank und KI). Mehrere Restaurants je Konto, Team mit Rollen (Inhaber/in, Betriebsleitung, Küche, Service) per E-Mail-Einladung. Funktionen: Tischplan mit Status, Reservierungsbuch mit automatischer Tischvergabe und Konfliktprüfung (Zeitfenster einstellbar), Gäste-CRM (Besuche/No-Shows aus Reservierungen, Allergien, Werbeeinwilligung), Speisekarte mit 14 LMIV-Allergenen, USt. 7 %/19 %, Wareneinsatz, Quote und Deckungsbeitrag aus Rezepten, Lager mit Meldebestand, Wareneingang und „Produktion buchen“, Personalbedarf und Schichtplan aus Reservierungen, Kasse per Webhook (`POST /api/gastro/pos/<token>`, idempotent über `externalId`) oder manuelle Tagesumsätze, Gäste-Feedback mit Antwortvorlage/KI-Entwurf, KI-Kochstudio (Gericht, 7-Tage-Plan, Verbesserung, Kartenanalyse) mit gespeicherten Plänen und Druck/PDF. Nicht übernommen aus dem Prototyp: Manus-Login, Testdaten-Import, Platzhalter ohne Funktion (Bestellungen, Abo-Seite). Kein QR-Menü, keine Bestellannahme, keine direkte Anbindung an konkrete Kassenhersteller.
 
 
+## Apps: Büro-Assistent
+
+`server/apps/office/`, `src/pages/apps/Office.jsx`. Privat oder als Firmen-Arbeitsbereich nutzbar; im Firmenbereich dürfen alle Team Member mitarbeiten (`memberWrite`).
+- **Aufgaben & Wiedervorlagen** mit Zuständigkeit, Priorität, Fälligkeit. Team Member ändern eigene/zugewiesene Aufgaben und können Aufgaben ohne Zuständigkeit übernehmen; Löschen nur Manager oder wer sie angelegt hat. Zuweisungen und fällige/überfällige Aufgaben erzeugen Mitteilungen (stündlicher Job, einmal pro Fälligkeitsdatum); fällige Punkte (≤ 2 Tage) erscheinen im Cockpit.
+- **Posteingang**: PDF/Bild/Text hochladen; Junis AI schlägt Titel, Absender, Kategorie, Zeichen, Frist, Betrag und Aufgaben vor (Vorschlag, wird erst nach Klick übernommen). Daraus Aufgaben anlegen, zuweisen, oder als Vertrag an den Fristen-Manager übergeben (braucht dort Schreibrechte).
+- **Briefe & Vorlagen**: 5 Startvorlagen (DIN-5008-orientiert) plus eigene/Firmenvorlagen mit `{{platzhaltern}}`, KI-Entwurf/-Überarbeitung, Druck/PDF über den Browser.
+- Nicht enthalten: E-Mail-Versand/-Empfang, OCR ohne KI-Schlüssel, Serienbriefe, rechtliche Prüfung der Vorlagen.
+
 ## KI-Anbieter: Claude oder Gemini
 
 Junis AI läuft wahlweise über Anthropic Claude (`ANTHROPIC_API_KEY`, Modell `JUNIS_MODEL`) oder Google Gemini (`GEMINI_API_KEY`, Modell `GEMINI_MODEL`, Standard `gemini-3.8-flash`). Ohne `JUNIS_AI_PROVIDER` wird Claude genutzt, wenn dessen Schlüssel gesetzt ist, sonst Gemini. `server/lib/gemini.js` übersetzt die Anfragen (Systemprompt, PDFs/Bilder, JSON-Schema-Ausgaben, Websuche → Google-Search-Grounding) und liefert Antworten im selben Format zurück; alle Funktionen (Lektionen, Interview, Verträge, Research, GastroFlow …) laufen unverändert. Unterschiede: Research-Quellen können bei Gemini Google-Weiterleitungslinks statt Originaladressen sein (ungeprüft); Qualität und Kosten wurden nicht mit echten Schlüsseln verglichen. PersonalAI kennt Gemini zusätzlich als eigenen Anbieter (OpenAI-kompatibler Endpunkt).
@@ -111,7 +119,7 @@ Junis AI läuft wahlweise über Anthropic Claude (`ANTHROPIC_API_KEY`, Modell `J
 
 **Arbeitsbereiche** (`server/lib/workspace.js`, Umschalter oben rechts)
 - Jede Person arbeitet im **privaten Bereich** oder im **Bereich eines Unternehmens** (Organisation vom Typ Team/Unternehmen). Der Client sendet `X-Junis-Workspace: private | org:<id>`.
-- Fristen-Manager, Barrierefreiheit-Scanner, GastroFlow und Talent-Ausschreibungen speichern Firmendaten mit `org_id`. Firmendaten erscheinen nie im privaten Bereich, private Daten nie im Firmenbereich. Lernen, Ziele, Skills, Junis AI und PersonalAI bleiben immer privat.
+- Büro-Assistent, Fristen-Manager, Barrierefreiheit-Scanner, GastroFlow und Talent-Ausschreibungen speichern Firmendaten mit `org_id`. Firmendaten erscheinen nie im privaten Bereich, private Daten nie im Firmenbereich. Lernen, Ziele, Skills, Junis AI und PersonalAI bleiben immer privat.
 - Rechte: Owner/Admin/Manager ändern Firmendaten, Team Member lesen. GastroFlow: Owner/Admin erhalten Inhaberrechte, Manager Betriebsleitung, Küche/Service per Einladung im Restaurant.
 - Business → „Apps & Sicherheit“: Apps je Unternehmen freigeben/sperren, Zwei-Faktor-Pflicht, Protokoll.
 - Erinnerungen und Hinweise zu Firmendaten gehen an Owner/Admins/Manager; Links öffnen automatisch den richtigen Arbeitsbereich.

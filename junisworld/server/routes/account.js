@@ -353,6 +353,9 @@ r.get('/account/export', h(async (req, res) => {
   data.talent_profile = all('SELECT * FROM talent_profiles WHERE user_id = ?', userId)
   data.talent_applications = all('SELECT * FROM talent_applications WHERE talent_id = ?', userId)
   data.talent_projects = all('SELECT * FROM talent_projects WHERE owner_id = ?', userId)
+  data.office_tasks = all('SELECT * FROM office_tasks WHERE owner_private = ?', userId)
+  data.office_inbox = all('SELECT * FROM office_inbox WHERE owner_private = ?', userId)
+  data.office_templates = all('SELECT * FROM office_templates WHERE owner_private = ?', userId)
   data.gastro_restaurants = all('SELECT r.id, r.name, r.address, r.concept, r.created_at, m.role FROM gastro_restaurants r JOIN gastro_members m ON m.restaurant_id = r.id WHERE m.user_id = ?', userId) // Betriebsdaten exportieren Inhaber/innen im Restaurant selbst
   const agentConvIds = data.agent_conversations.map((c) => c.id)
   data.agent_messages = agentConvIds.length ? all(`SELECT * FROM agent_messages WHERE conversation_id IN (${agentConvIds.map(() => '?').join(',')})`, ...agentConvIds) : []

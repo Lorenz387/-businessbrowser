@@ -4,10 +4,17 @@ import { Badge, Card, PageHeader, Section } from '../components/ui.jsx'
 import { useWorkspace } from '../lib/workspace.jsx'
 
 // App ids in the API registry (server/lib/workspace.js).
-const API_ID = { 'personal-ai': 'personal-ai', accessibility: 'accessibility', contracts: 'contracts', gastro: 'gastro' }
+const API_ID = { 'personal-ai': 'personal-ai', accessibility: 'accessibility', contracts: 'contracts', gastro: 'gastro', office: 'office' }
 
 // Only apps that are built are listed as available. Planned apps are shown separately and clearly marked.
 const APPS = [
+  {
+    id: 'office',
+    name: 'Büro-Assistent',
+    audience: 'Büro & Verwaltung',
+    summary: 'Aufgaben und Wiedervorlagen mit Zuständigkeit, gemeinsamer Posteingang (PDF hochladen, KI erkennt Absender, Fristen und Aufgaben) und Briefvorlagen nach DIN 5008 mit KI-Entwurf.',
+    to: '/apps/office',
+  },
   {
     id: 'personal-ai',
     name: 'PersonalAI',

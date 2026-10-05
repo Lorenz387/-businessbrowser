@@ -5,6 +5,7 @@ import { APPS, appEnabled, ORG_WRITE_ROLES } from './workspace.js'
 import { contractOut, fmtDate } from '../apps/contracts/service.js'
 import { membership, permissions, revenue } from '../apps/gastro/service.js'
 import { projectOut } from '../apps/talent/service.js'
+import { officeWhere, taskOut, inboxOut, fmt as fmtOffice } from '../apps/office/service.js'
 
 const todayIn = (tz) => { try { return new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date()) } catch { return new Date().toISOString().slice(0, 10) } }
 const eur = (n) => (n == null ? '–' : n.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' }))
@@ -186,6 +187,62 @@ const talent = {
   },
 }
 
+// ---------- Büro-Assistent ----------
+const office = {
+  id: 'office',
+  link: '/apps/office',
+  tasks(ctx) {
+    const [w, p] = officeWhere(ctx)
+    return all(`SELECT * FROM office_tasks WHERE ${w} AND status != 'done' ORDER BY due_date IS NULL, due_date`, ...p).map((t) => taskOut(t))
+  },
+  inbox(ctx) {
+    const [w, p] = officeWhere(ctx)
+    return all(`SELECT * FROM office_inbox WHERE ${w} AND status IN ('new','assigned') ORDER BY received_at DESC`, ...p).map(inboxOut)
+  },
+  summary(ctx) {
+    const tasks = this.tasks(ctx)
+    const inbox = this.inbox(ctx)
+    const soon = new Date(Date.now() + 2 * 864e5).toISOString().slice(0, 10)
+    // In a company the cockpit shows each person their own tasks plus unassigned ones; managers see all overdue ones.
+    const relevant = (t) => ctx.type === 'private' || t.assignee_id === ctx.userId || !t.assignee_id || (ORG_WRITE_ROLES.includes(ctx.role) && t.overdue)
+    const items = [
+      ...tasks.filter((t) => relevant(t) && t.due_date && t.due_date <= soon).map((t) => ({
+        title: `${t.kind === 'followup' ? 'Wiedervorlage' : 'Aufgabe'}: ${t.title}`,
+        detail: `${t.overdue ? `überfällig seit ${fmtOffice(t.due_date)}` : t.dueToday ? 'heute fällig' : `fällig ${fmtOffice(t.due_date)}`}${t.assignee_name ? ` · ${t.assignee_name}` : ' · noch niemand zuständig'}`,
+        link: `/apps/office?tab=tasks&task=${t.id}`, urgency: t.overdue || t.dueToday ? 'high' : 'medium', due: t.due_date,
+      })),
+      ...inbox.filter((i) => i.status === 'new' || i.assignee_id === ctx.userId).map((i) => ({
+        title: `Posteingang: ${i.title}`,
+        detail: `${i.categoryLabel}${i.deadline ? ` · Frist ${fmtOffice(i.deadline)}` : ''}${i.status === 'new' ? ' · noch nicht zugeordnet' : ''}`,
+        link: `/apps/office?tab=inbox&item=${i.id}`, urgency: i.deadline && i.deadline <= soon ? 'high' : 'low', due: i.deadline,
+      })),
+    ]
+    return {
+      stats: [
+        { label: 'Offene Aufgaben', value: tasks.length },
+        { label: 'Überfällig', value: tasks.filter((t) => t.overdue).length },
+        { label: 'Neue Eingänge', value: inbox.filter((i) => i.status === 'new').length },
+      ],
+      items,
+    }
+  },
+  search(ctx, q) {
+    const [w, p] = officeWhere(ctx)
+    return [
+      ...all(`SELECT id, title, status FROM office_tasks WHERE ${w} AND (lower(title) LIKE ? OR lower(notes) LIKE ?) LIMIT 5`, ...p, like(q), like(q))
+        .map((t) => ({ type: 'Aufgabe', title: t.title, subtitle: t.status === 'done' ? 'erledigt' : 'offen', href: `/apps/office?tab=tasks&task=${t.id}` })),
+      ...all(`SELECT id, title, sender FROM office_inbox WHERE ${w} AND (lower(title) LIKE ? OR lower(sender) LIKE ? OR lower(summary) LIKE ? OR lower(reference) LIKE ?) LIMIT 5`, ...p, like(q), like(q), like(q), like(q))
+        .map((i) => ({ type: 'Posteingang', title: i.title, subtitle: i.sender, href: `/apps/office?tab=inbox&item=${i.id}` })),
+    ]
+  },
+  aiContext(ctx) {
+    const tasks = this.tasks(ctx)
+    const inbox = this.inbox(ctx)
+    if (!tasks.length && !inbox.length) return ''
+    return `Büro-Assistent:\nOffene Aufgaben:\n${tasks.slice(0, 40).map((t) => `- ${t.title}${t.due_date ? ` (fällig ${fmtOffice(t.due_date)}${t.overdue ? ', überfällig' : ''})` : ''}${t.assignee_name ? `, zuständig: ${t.assignee_name}` : ', niemand zuständig'}${t.kind === 'followup' ? ', Wiedervorlage' : ''}`).join('\n') || '- keine'}\nPosteingang (offen):\n${inbox.slice(0, 20).map((i) => `- ${i.title}${i.sender ? ` von ${i.sender}` : ''} [${i.categoryLabel}]${i.deadline ? `, Frist ${fmtOffice(i.deadline)}` : ''}${i.amount != null ? `, ${eur(i.amount)}` : ''}${i.summary ? `: ${i.summary}` : ''}`).join('\n') || '- leer'}`
+  },
+}
+
 // ---------- Firmenwissen (nur im Firmenbereich) ----------
 const knowledge = {
   id: 'knowledge',
@@ -204,7 +261,7 @@ const knowledge = {
   },
 }
 
-export const CONNECTORS = [contracts, accessibility, gastro, talent]
+export const CONNECTORS = [office, contracts, accessibility, gastro, talent]
 
 /** Workspace context for connectors. `ws` comes from resolveWorkspace(req). */
 export const connectorContext = (req, ws) => ({ ...ws, userId: req.user.id, user: req.user })
